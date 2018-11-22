@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="test_binary_wss" />
+		<Option pch_mode="2" />
+		<Option compiler="mingw_64_7_3_0" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/test_binary_wss" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-g" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/test_binary_wss" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-std=c++14" />
+					<Add option="-DUSE_STANDALONE_ASIO" />
+					<Add option="-DASIO_STANDALONE" />
+					<Add directory="../../lib/Simple-WebSocket-Server" />
+					<Add directory="../../lib/openssl_win64/include" />
+					<Add directory="../../lib/openssl_win64/lib" />
+					<Add directory="../../lib/openssl_win64/bin" />
+					<Add directory="../../lib/asio/asio/include" />
+					<Add directory="../../lib/xtime_cpp/src" />
+					<Add directory="../../lib/json/include" />
+					<Add directory="../../src" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+					<Add library="../../lib/openssl_win64/lib/capi.lib" />
+					<Add library="../../lib/openssl_win64/lib/dasync.lib" />
+					<Add library="../../lib/openssl_win64/lib/libcrypto.lib" />
+					<Add library="../../lib/openssl_win64/lib/libssl.lib" />
+					<Add library="../../lib/openssl_win64/lib/openssl.lib" />
+					<Add library="../../lib/openssl_win64/lib/ossltest.lib" />
+					<Add library="../../lib/openssl_win64/lib/padlock.lib" />
+					<Add library="ws2_32" />
+					<Add library="wsock32" />
+					<Add directory="../../lib/xtime_cpp/src" />
+					<Add directory="../../lib/openssl_win64/lib" />
+					<Add directory="../../lib/openssl_win64/include" />
+					<Add directory="../../lib/openssl_win64/bin" />
+					<Add directory="../../lib/Simple-WebSocket-Server" />
+					<Add directory="../../lib/asio/asio/include" />
+					<Add directory="../../lib/json/include" />
+					<Add directory="../../src" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+			<Add option="-fexceptions" />
+		</Compiler>
+		<Unit filename="../../src/BinaryApi.hpp" />
+		<Unit filename="main.cpp" />
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
