@@ -130,6 +130,10 @@ private:
 
 public:
 //------------------------------------------------------------------------------
+        /** \brief Инициализировать класс
+         * \param token Токен. Можно указать пустую строку, но тогда не все функции будут доступны
+         * \param app_id ID API вашего приложения
+         */
         BinaryApi(std::string token = "", std::string app_id = "1089")
                 : client_("ws.binaryws.com/websockets/v3?l=en&app_id=" +
                         app_id, false)
@@ -221,7 +225,6 @@ public:
                                                         start = std::chrono::steady_clock::now();
                                                 }
                                         }
-
                                 } else {
                                         start = std::chrono::steady_clock::now();
                                 }
@@ -232,6 +235,25 @@ public:
                 client_thread.detach();
                 send_thread.detach();
         }
+
+        enum ErrorType {
+                OK = 0,
+                NO_AUTHORIZATION = -1,
+        };
+//------------------------------------------------------------------------------
+        /** \brief Получить данные о размере депозита
+         * \param balance Депозит
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+         inline int get_balance(double& balance)
+         {
+                std::unique_lock<std::recursive_mutex> locker(balance_lock_);
+                if(is_authorize_) {
+                        balance = balance_;
+                        return OK;
+                }
+                return NO_AUTHORIZATION;
+         }
 };
 
 #endif // BINARY_API_HPP_INCLUDED
