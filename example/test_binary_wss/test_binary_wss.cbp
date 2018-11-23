@@ -32,7 +32,7 @@
 					<Add directory="../../lib/asio/asio/include" />
 					<Add directory="../../lib/xtime_cpp/src" />
 					<Add directory="../../lib/json/include" />
-					<Add directory="../../src" />
+					<Add directory="../../include" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
@@ -52,7 +52,7 @@
 					<Add directory="../../lib/Simple-WebSocket-Server" />
 					<Add directory="../../lib/asio/asio/include" />
 					<Add directory="../../lib/json/include" />
-					<Add directory="../../src" />
+					<Add directory="../../include" />
 				</Linker>
 			</Target>
 		</Build>
@@ -60,7 +60,7 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="../../src/BinaryApi.hpp" />
+		<Unit filename="../../include/BinaryApi.hpp" />
 		<Unit filename="main.cpp" />
 		<Extensions>
 			<code_completion />

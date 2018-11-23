@@ -6,6 +6,8 @@
 
 Данная библиотека содержит класс для взаимодействия с Binary.com WebSocket API v3. [https://developers.binary.com/api/](https://developers.binary.com/api/)
 
+Просмотреть схемы JSON можно здесь - [https://github.com/binary-com/websockets/tree/gh-pages/config/v3](https://github.com/binary-com/websockets/tree/gh-pages/config/v3)
+
 ### Зависимости
 
 * *binary-cpp-api* зависит от следующих внешних библиотек / пакетов
@@ -20,5 +22,5 @@
 
 ### Автор
 
-Elektro Yar [electroyar2@gmail.com](electroyar2@gmail.com)
+elektro yar [electroyar2@gmail.com](electroyar2@gmail.com)
 
