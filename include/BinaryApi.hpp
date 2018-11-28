@@ -39,6 +39,7 @@ public:
         using json = nlohmann::json;
         using WssClient = SimpleWeb::SocketClient<SimpleWeb::WSS>;
 
+        // варианты ошибок API
         enum ErrorType {
                 OK = 0,
                 NO_AUTHORIZATION = -1,
@@ -46,6 +47,20 @@ public:
                 UNKNOWN_ERROR = -3,
                 NO_INIT = -4,
                 NO_OPEN_CONNECTION = -5,
+        };
+
+        // типы контрактов
+        enum ContractType {
+                BUY = 1,
+                SELL = -1,
+        };
+        // типы длительности контракта
+        enum DurationType {
+                TICKS = 0,
+                SECONDS = 1,
+                MINUTES = 2,
+                HOURS = 3,
+                DAYS = 4,
         };
 private:
         WssClient client_; // Класс клиента
@@ -72,11 +87,15 @@ private:
         std::vector<std::vector<double>> close_data_;
         std::vector<std::vector<unsigned long long>> time_data_;
         bool is_stream_quotations = false;
+        bool is_stream_proposal = false;
+        std::recursive_mutex flag_quotations_lock_; // для флага потока котировок
+        std::recursive_mutex flag_proposal_lock_;
+        std::recursive_mutex proposal_lock_;
+        std::recursive_mutex quotations_lock_; // для данных потока котировок
+        std::recursive_mutex symbols_lock_;
+        // время сервера
         unsigned long long last_time_ = 0;
         bool is_last_time = false;
-
-        std::recursive_mutex proposal_lock_;
-        std::recursive_mutex quotations_lock_;
         std::recursive_mutex time_lock_;
 
         std::recursive_mutex send_queue_lock_;
@@ -111,14 +130,16 @@ private:
                 return NO_OPEN_CONNECTION;
         }
 //------------------------------------------------------------------------------
-        bool check_time_message(json &j)
+        bool check_time_message(json &j,
+                                json::iterator& j_msg_type,
+                                json::iterator& j_error)
         {
-                if(j["msg_type"] == "time") {
-                        if(j["error"] != nullptr) {
+                if(*j_msg_type == "time") {
+                        if(j_error != j.end()) {
                                 // попробуем еще раз
                                 std::string message = j["echo_req"].dump();
                                 std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                if(j["error"]["code"] == "RateLimit")
+                                if((*j_error)["code"] == "RateLimit")
                                         is_add_delay = true;
                                 send_queue_.push(message);
                         } else {
@@ -132,51 +153,55 @@ private:
                 }
         }
 //------------------------------------------------------------------------------
-        bool check_tick_message(json &j)
+        bool check_tick_message(json &j,
+                                json::iterator& j_msg_type,
+                                json::iterator& j_error)
         {
-                if(j["msg_type"] == "tick") {
-                        if(j["error"] != nullptr) {
-                                if(j["error"]["code"] != "AlreadySubscribed") {
+                if(*j_msg_type == "tick") {
+                        if(j_error != j.end()) {
+                                if((*j_error)["code"] != "AlreadySubscribed") {
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
                                         std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                        if(j["error"]["code"] == "RateLimit")
+                                        if((*j_error)["code"] == "RateLimit")
                                                 is_add_delay = true;
                                         send_queue_.push(message);
                                 }
                         } else {
-                                if(j["tick"]["quote"] != nullptr) {
-                                        double quote = atof((j["tick"]["quote"].get<std::string>()).c_str());              // котировка
-                                        unsigned long long epoch = atoi((j["tick"]["epoch"].get<std::string>()).c_str());  // время
-                                        std::string symbol = j["tick"]["symbol"];                                          // символ
-                                        unsigned long long lastepoch = (epoch/60)*60;                                               // время послденей закрытой свечи
+                                //if(j["tick"]["quote"] != nullptr) {
+                                auto it_tick = j.find("tick");
+                                double quote = atof(((*it_tick)["quote"].get<std::string>()).c_str());              // котировка
+                                unsigned long long epoch = atoi(((*it_tick)["epoch"].get<std::string>()).c_str());  // время
+                                std::string symbol = (*it_tick)["symbol"];                                          // символ
+                                unsigned long long lastepoch = (epoch/60)*60;                                               // время послденей закрытой свечи
 
-                                        std::unique_lock<std::recursive_mutex> locker_send(quotations_lock_);
-                                        if(map_symbol_.find(symbol) == map_symbol_.end())
-                                                return true;
+                                std::unique_lock<std::recursive_mutex> locker_quotations(quotations_lock_);
+                                std::unique_lock<std::recursive_mutex> locker_proposal(proposal_lock_);
+                                if(map_symbol_.find(symbol) == map_symbol_.end())
+                                        return true;
 
-                                        int indx = map_symbol_[symbol];
-                                        if(indx >= 0 && indx < (int)close_data_.size()) {
-                                                if(epoch % 60 == 0) {
-                                                        close_data_[indx].push_back(quote);
-                                                        time_data_[indx].push_back(epoch);
-                                                } else
-                                                if(close_data_[indx].size() > 0) {
-                                                        if(lastepoch > time_data_[indx].back()) {
-                                                                close_data_[indx].push_back(quote);
-                                                                time_data_[indx].push_back(lastepoch);
-                                                        } else {
-                                                                close_data_[indx][close_data_[indx].size() - 1] = quote;
-                                                    }
-                                                } else {
+                                int indx = map_symbol_[symbol];
+                                if(indx >= 0 && indx < (int)close_data_.size()) {
+                                        if(epoch % 60 == 0) {
+                                                close_data_[indx].push_back(quote);
+                                                time_data_[indx].push_back(epoch);
+                                        } else
+                                        if(close_data_[indx].size() > 0) {
+                                                if(lastepoch > time_data_[indx].back()) {
                                                         close_data_[indx].push_back(quote);
                                                         time_data_[indx].push_back(lastepoch);
-                                                }
-                                                std::unique_lock<std::recursive_mutex> locker(time_lock_);
-                                                last_time_ = std::max(epoch, last_time_);
-                                                is_last_time = true;
-                                        } // if
-                                }
+                                                } else {
+                                                        close_data_[indx][close_data_[indx].size() - 1] = quote;
+                                            }
+                                        } else {
+                                                close_data_[indx].push_back(quote);
+                                                time_data_[indx].push_back(lastepoch);
+                                        }
+                                        std::unique_lock<std::recursive_mutex> locker_time(time_lock_);
+                                        last_time_ = std::max(epoch, last_time_);
+                                        is_last_time = true;
+                                } // if
+                                //}
                         }
                         return true;
                 } else {
@@ -184,13 +209,15 @@ private:
                 }
         }
 //------------------------------------------------------------------------------
-        bool check_candles_message(json &j)
+        bool check_candles_message(json &j,
+                                   json::iterator& j_msg_type,
+                                   json::iterator& j_error)
         {
-                if(j["msg_type"] == "candles") {
+                if(*j_msg_type == "candles") {
                         std::unique_lock<std::recursive_mutex> locker(array_candles_lock_);
                         is_array_candles = true;
-                        if(j["error"] != nullptr) {
-                                if(j["error"]["code"] == "RateLimit") {
+                        if(j_error != j.end()) {
+                                if((*j_error)["code"] == "RateLimit") {
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
                                         std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
@@ -212,20 +239,22 @@ private:
                 }
         }
 //------------------------------------------------------------------------------
-        bool check_authorize_message(json &j)
+        bool check_authorize_message(json &j,
+                                     json::iterator& j_msg_type,
+                                     json::iterator& j_error)
         {
                 // получили сообщение авторизации
-                if(j["msg_type"] == "authorize") {
-                        if(j["error"] != nullptr) {
+                if(*j_msg_type == "authorize") {
+                        if(j_error != j.end()) {
                                 std::unique_lock<std::recursive_mutex> locker(balance_lock_);
                                 is_authorize_ = false;
                                 // попробуем еще раз залогиниться
                                 std::string message = j["echo_req"].dump();
                                 std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                if(j["error"]["code"] == "RateLimit")
+                                if((*j_error)["code"] == "RateLimit")
                                         is_add_delay = true;
                                 else
-                                if(j["error"]["code"] == "InvalidToken") {
+                                if((*j_error)["code"] == "InvalidToken") {
                                         std::unique_lock<std::recursive_mutex> locker(connection_lock_);
                                         is_error_token_ = true;
                                         return true;
@@ -243,31 +272,41 @@ private:
                 }
         }
 //------------------------------------------------------------------------------
-        bool check_proposal_message(json &j)
+        bool check_proposal_message(json &j,
+                                    json::iterator& j_msg_type,
+                                    json::iterator& j_error)
         {
-                if(j["msg_type"] == "proposal" &&
-                        j["echo_req"]["subscribe"] == 1) {
-                        std::string _symbol = j["echo_req"]["symbol"];
-                        std::unique_lock<std::recursive_mutex> locker(proposal_lock_);
+                auto it_echo_req = j.find("echo_req");
+                //if(j["msg_type"] == "proposal" &&
+                if(*j_msg_type == "proposal" &&
+                        (*it_echo_req)["subscribe"] == 1) {
+                        std::string _symbol = (*it_echo_req)["symbol"];
+                        std::unique_lock<std::recursive_mutex> locker_proposal(proposal_lock_);
+                        std::unique_lock<std::recursive_mutex> locker_quotations(quotations_lock_);
                         if(map_symbol_.find(_symbol) != map_symbol_.end()) {
                                 int indx = map_symbol_[_symbol];
                                 double temp = 0.0;
-                                if(j["error"] == nullptr) {
-                                        double ask_price = atof((j["proposal"]["ask_price"].get<std::string>()).c_str());
-                                        double payout = atof((j["proposal"]["payout"].get<std::string>()).c_str());
+                                if(j_error == j.end()) {
+                                        auto it_proposal = j.find("proposal");
+                                        double ask_price = atof(((*it_proposal)["ask_price"].get<std::string>()).c_str());
+                                        double payout = atof(((*it_proposal)["payout"].get<std::string>()).c_str());
                                         temp = ask_price != 0 ? (payout/ask_price) - 1 : 0.0;
                                 } else {
+                                        if((*j_error)["code"] == "AlreadySubscribed") {
+                                                return true;
+                                        }
                                         // отправим сообщение о подписки на выплаты
                                         std::string message = j["echo_req"].dump();
                                         std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                        if(j["error"]["code"] == "RateLimit")
+                                        if((*j_error)["code"] == "RateLimit")
                                                 is_add_delay = true;
                                         send_queue_.push(message);
                                 }
-                                if(j["echo_req"]["contract_type"] == "CALL") {
+                                auto it_contract_type = (*it_echo_req).find("contract_type");
+                                if(*it_contract_type == "CALL") {
                                         proposal_buy_[indx] = temp;
                                 } else
-                                if(j["echo_req"]["contract_type"] == "PUT") {
+                                if(*it_contract_type == "PUT") {
                                         proposal_sell_[indx] = temp;
                                 } // if
                         } //if map_proposal_symbol
@@ -281,14 +320,21 @@ private:
         {
                 try {
                         json j = json::parse(str);
+                        /* для ускорения заранее находим сообщения
+                         * msg_type и error
+                         */
+                        json::iterator it_msg_type = j.find("msg_type");
+                        json::iterator it_error = j.find("error");
                         // обрабатываем сообщение
-                        if(check_tick_message(j))
+                        if(check_tick_message(j, it_msg_type, it_error))
                                 return;
-                        if(check_proposal_message(j))
+                        if(check_proposal_message(j, it_msg_type, it_error))
                                 return;
-                        if(check_authorize_message(j))
+                        if(check_authorize_message(j, it_msg_type, it_error))
                                 return;
-                        if(check_candles_message(j))
+                        if(check_candles_message(j, it_msg_type, it_error))
+                                return;
+                        if(check_time_message(j, it_msg_type, it_error))
                                 return;
                 }
                 catch(...) {
@@ -345,7 +391,9 @@ public:
                         const std::string & /*reason*/)
                 {
                         std::unique_lock<std::recursive_mutex> locker(connection_lock_);
+                        std::unique_lock<std::recursive_mutex> locker2(balance_lock_);
                         is_open_connection_ = false;
+                        is_authorize_ = false;
                         std::cout << "BinaryApi: Closed connection with status code " <<
                                 status << std::endl;
                 };
@@ -354,7 +402,9 @@ public:
                         const SimpleWeb::error_code &ec)
                 {
                         std::unique_lock<std::recursive_mutex> locker(connection_lock_);
+                        std::unique_lock<std::recursive_mutex> locker2(balance_lock_);
                         is_open_connection_ = false;
+                        is_authorize_ = false;
                         std::cout << "BinaryApi: Error: " <<
                                 ec << ", error message: " << ec.message() << std::endl;
                 };
@@ -362,6 +412,12 @@ public:
                 std::thread client_thread([&]() {
                         while(true) {
                                 client_.start();
+                                std::unique_lock<std::recursive_mutex> locker_q(flag_quotations_lock_);
+                                std::unique_lock<std::recursive_mutex> locker_p(flag_proposal_lock_);
+                                std::unique_lock<std::recursive_mutex> locker_t(time_lock_);
+                                is_stream_quotations = false;
+                                is_stream_proposal = false;
+                                is_last_time = false;
                                 std::this_thread::sleep_for(std::chrono::seconds(5));
                         }
                 });
@@ -580,8 +636,8 @@ public:
          */
         inline void init_symbols(std::vector<std::string> &symbols)
         {
-                std::unique_lock<std::recursive_mutex> locker(proposal_lock_);
-                std::unique_lock<std::recursive_mutex> locker2(quotations_lock_);
+                std::unique_lock<std::recursive_mutex> locker_p(proposal_lock_);
+                std::unique_lock<std::recursive_mutex> locker_q(quotations_lock_);
                 symbols_ = symbols;
                 map_symbol_.clear();
                 close_data_.clear();
@@ -620,6 +676,7 @@ public:
                 j["ticks"] = j_array;
                 j["subscribe"] = 1;
                 int err_data = send_json(j);
+                std::unique_lock<std::recursive_mutex> locker(flag_quotations_lock_);
                 if(err_data == OK)
                         is_stream_quotations = true;
                 return err_data;
@@ -632,21 +689,24 @@ public:
         {
                 json j;
                 j["forget_all"] = "ticks";
+                std::unique_lock<std::recursive_mutex> locker(flag_quotations_lock_);
                 is_stream_quotations = false;
                 return send_json(j);
         }
 //------------------------------------------------------------------------------
         /** \brief Получить данные потока котировок
+         * Порядок следования валютных пар зависит от порядка, указанного в массие функции init_symbols
          * \param close_data массив цен закрытия минутных свечей
          * \param time_data массив временных меток цен открытия минутных свечей
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
         inline int get_stream_quotations(std::vector<std::vector<double>> &close_data,
-                                  std::vector<std::vector<unsigned long long>> &time_data)
+                                         std::vector<std::vector<unsigned long long>> &time_data)
         {
+                std::unique_lock<std::recursive_mutex> locker_fq(flag_quotations_lock_);
                 if(symbols_.size() == 0 || !is_stream_quotations)
                         return NO_INIT;
-                std::unique_lock<std::recursive_mutex> locker_send(quotations_lock_);
+                std::unique_lock<std::recursive_mutex> locker_q(quotations_lock_);
                 close_data = close_data_;
                 time_data = time_data_;
                 return OK;
@@ -671,7 +731,7 @@ public:
         inline int get_servertime(unsigned long long &timestamp)
         {
                 std::unique_lock<std::recursive_mutex> locker(time_lock_);
-
+                std::unique_lock<std::recursive_mutex> locker2(flag_quotations_lock_);
                 if(is_last_time || is_stream_quotations) {
                         timestamp = last_time_;
                         is_last_time = false;
@@ -679,6 +739,122 @@ public:
                 } else {
                         return NO_INIT;
                 }
+        }
+//------------------------------------------------------------------------------
+        /** \brief Инициализировать поток процентов выплат по ставке по одной валютной паре и одному направлению
+         * \param symbol имя валютной пары
+         * \param amount размер ставки
+         * \param contract_type тип контракта (см. ContractType)
+         * \param duration длительность контракта
+         * \param duration_unit единица измерения длительности контракта (см. DurationType)
+         * \param currency валюта счета
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        int init_stream_proposal(std::string symbol,
+                                 double amount,
+                                 int contract_type,
+                                 int duration,
+                                 int duration_unit,
+                                 std::string currency = "USD")
+        {
+                json j;
+                j["proposal"] = 1;
+                j["subscribe"] = 1;
+                j["amount"] = std::to_string(amount);
+                j["basis"] = "stake"; // у нас ставка
+                if(contract_type == BUY)
+                        j["contract_type"] = "CALL";
+                else if(contract_type == SELL)
+                        j["contract_type"] = "PUT";
+                if(currency_ == "")
+                        j["currency"] = currency;
+                else
+                        j["currency"] = currency_;
+
+                j["duration"] = std::to_string(duration);
+                if(duration_unit == SECONDS) j["duration_unit"] = "s";
+                else if(duration_unit == MINUTES) j["duration_unit"] = "m";
+                else if(duration_unit == HOURS) j["duration_unit"] = "h";
+                else if(duration_unit == TICKS) j["duration_unit"] = "t";
+                else if(duration_unit == DAYS) j["duration_unit"] = "d";
+                j["symbol"] = symbol;
+                return send_json(j);
+        }
+//------------------------------------------------------------------------------
+        /** \brief Инициализировать поток процентов выплат по ставке по всем валютным парам
+         * \param amount размер ставки (помните об ограничениях брокера)
+         * \param duration длительность контракта
+         * \param duration_unit единица измерения длительности контракта (см. DurationType)
+         * \param currency валюта счета
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        int init_stream_proposal(double amount,
+                                 int duration,
+                                 int duration_unit,
+                                 std::string currency = "USD")
+        {
+                if(symbols_.size() == 0)
+                        return NO_INIT;
+                for(size_t i = 0; i < symbols_.size(); ++i) {
+                        int err_data = init_stream_proposal(symbols_[i],
+                                                            amount,
+                                                            BUY,
+                                                            duration,
+                                                            duration_unit,
+                                                            currency);
+                        if(err_data != OK) {
+                                std::cout << "BinaryApi: init_stream_proposal error! Message: " <<
+                                        symbols_[i] << " BUY " << std::endl;
+                                return err_data;
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                        err_data = init_stream_proposal(symbols_[i],
+                                                        amount,
+                                                        SELL,
+                                                        duration,
+                                                        duration_unit,
+                                                        currency);
+                        if(err_data != OK) {
+                                std::cout << "BinaryApi: init_stream_proposal error! Message: " <<
+                                        symbols_[i] << " SELL " << std::endl;
+                                return err_data;
+                        }
+                }
+                std::unique_lock<std::recursive_mutex> locker(flag_proposal_lock_);
+                is_stream_proposal = true;
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить данные потока процентов выплат
+         * Проценты выплат варьируются обычно от 0 до 1.0, где 1.0 соответствует 100% выплате брокера
+         * Порядок следования валютных пар зависит от порядка, указанного в массие функции init_symbols
+         * \param buy_data проценты выплат по сделкам BUY для всех валютных пар
+         * \param sell_data проценты выплат по сделкам SELL для всех валютных пар
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+
+        int get_stream_proposal(std::vector<double> &buy_data,
+                                std::vector<double> &sell_data)
+        {
+                std::unique_lock<std::recursive_mutex> locker_fq(flag_proposal_lock_);
+                if(symbols_.size() == 0 || !is_stream_proposal)
+                        return NO_INIT;
+                std::unique_lock<std::recursive_mutex> locker_q(proposal_lock_);
+                buy_data = proposal_buy_;
+                sell_data = proposal_sell_;
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Остановить поток процентов выплат
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        int stop_stream_proposal()
+        {
+                json j;
+                j["forget_all"] = "proposal";
+                std::unique_lock<std::recursive_mutex> locker(flag_proposal_lock_);
+                is_stream_proposal = false;
+                return send_json(j);
         }
 };
 
