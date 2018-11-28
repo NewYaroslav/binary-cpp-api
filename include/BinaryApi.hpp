@@ -423,8 +423,8 @@ public:
                         int status,
                         const std::string & /*reason*/)
                 {
-                        std::unique_lock<std::recursive_mutex> locker(connection_lock_);
-                        std::unique_lock<std::recursive_mutex> locker2(balance_lock_);
+                        std::unique_lock<std::recursive_mutex> locker_c(connection_lock_);
+                        std::unique_lock<std::recursive_mutex> locker_b(balance_lock_);
                         is_open_connection_ = false;
                         is_authorize_ = false;
                         std::cout << "BinaryApi: Closed connection with status code " <<
@@ -434,8 +434,8 @@ public:
                 client_.on_error = [&](std::shared_ptr<WssClient::Connection> /*connection*/,
                         const SimpleWeb::error_code &ec)
                 {
-                        std::unique_lock<std::recursive_mutex> locker(connection_lock_);
-                        std::unique_lock<std::recursive_mutex> locker2(balance_lock_);
+                        std::unique_lock<std::recursive_mutex> locker_c(connection_lock_);
+                        std::unique_lock<std::recursive_mutex> locker_b(balance_lock_);
                         is_open_connection_ = false;
                         is_authorize_ = false;
                         std::cout << "BinaryApi: Error: " <<
@@ -459,19 +459,61 @@ public:
                         //std::chrono::duration<double> start;
                         std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
                         std::chrono::time_point<std::chrono::steady_clock> stop = std::chrono::steady_clock::now();
+                        std::chrono::time_point<std::chrono::steady_clock> start_min = std::chrono::steady_clock::now();
+                        std::chrono::time_point<std::chrono::steady_clock> stop_min = std::chrono::steady_clock::now();
+                        const float SECONDS_MINUTE = 60.0f;
+                        const int max_num_requestes = 180; // максимальное число запросов в минуту
+                        int num_requestes = 0; // число запросов в минуту
                         while(true) {
-                                std::unique_lock<std::recursive_mutex> locker(connection_lock_);
+                                connection_lock_.lock();
                                 if(is_open_connection_) {
-                                        std::unique_lock<std::recursive_mutex> locker(send_queue_lock_);
+                                        connection_lock_.unlock();
                                         // отправим сообщение, если есть что отправлять
+                                        send_queue_lock_.lock();
                                         if(send_queue_.size() > 0) {
                                                 std::string message = send_queue_.front();
                                                 send_queue_.pop();
+                                                send_queue_lock_.unlock();
                                                 //std::cout << "BinaryApi: send " <<
                                                 //        message << std::endl;
+                                                connection_lock_.lock();
                                                 save_connection_->send(message);
+                                                connection_lock_.unlock();
+                                                /* проверим ограничение запросов в минуту
+                                                 */
+                                                num_requestes++; // увеличим число запросов в минуту
+                                                stop_min = std::chrono::steady_clock::now();
+                                                std::chrono::duration<double> diff;
+                                                diff = std::chrono::duration_cast<std::chrono::seconds>(stop_min - start_min);
+                                                // проверим количество запросов в минуту
+                                                if(diff.count() < SECONDS_MINUTE) {
+                                                        // запросов стало слишком много?
+                                                        if(num_requestes >= max_num_requestes) {
+                                                                // подождем, пока не пройдет минута
+                                                                while(true) {
+                                                                        stop_min = std::chrono::steady_clock::now();
+                                                                        std::chrono::duration<double> diff;
+                                                                        diff = std::chrono::duration_cast<std::chrono::seconds>(stop_min - start_min);
+                                                                        if(diff.count() >= SECONDS_MINUTE) {
+                                                                                // минута прошла, уходим
+                                                                                start_min = std::chrono::steady_clock::now();
+                                                                                stop_min = std::chrono::steady_clock::now();
+                                                                                num_requestes = 0;
+                                                                                break;
+                                                                        }
+                                                                        std::this_thread::yield();
+                                                                } // while
+                                                        } // if
+                                                } else {
+                                                        start_min = std::chrono::steady_clock::now();
+                                                        stop_min = std::chrono::steady_clock::now();
+                                                        num_requestes = 0;
+                                                }
+                                                /*
+                                                 */
                                                 start = std::chrono::steady_clock::now();
                                         } else {
+                                                send_queue_lock_.unlock();
                                                 stop = std::chrono::steady_clock::now();
                                                 std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
                                                 const float PING_DELAY = 20.0f;
@@ -479,11 +521,14 @@ public:
                                                         json j;
                                                         j["ping"] = 1;
                                                         std::string message = j.dump();
+                                                        send_queue_lock_.lock();
                                                         send_queue_.push(message);
+                                                        send_queue_lock_.unlock();
                                                         start = std::chrono::steady_clock::now();
                                                 }
                                         }
                                 } else {
+                                        connection_lock_.unlock();
                                         start = std::chrono::steady_clock::now();
                                 }
                                 std::this_thread::yield();
@@ -823,6 +868,14 @@ public:
         {
                 if(symbols_.size() == 0)
                         return NO_INIT;
+                // максимальное число запросов для подписки на проценты выплат в минуту - 25
+                int num_stream_proposal = 0;
+                const int max_num_stream_proposal = 25;
+                const float SECONDS_MINUTE = 60.0f;
+                std::chrono::duration<double> diff;
+                std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
+                std::chrono::time_point<std::chrono::steady_clock> stop = std::chrono::steady_clock::now();
+                //
                 for(size_t i = 0; i < symbols_.size(); ++i) {
                         int err_data = init_stream_proposal(symbols_[i],
                                                             amount,
@@ -835,7 +888,37 @@ public:
                                         symbols_[i] << " BUY " << std::endl;
                                 return err_data;
                         }
-                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                        /* проверим ограничения на подписку о процентах выплат
+                         */
+                        num_stream_proposal++; // увеличим число запросов
+                        stop = std::chrono::steady_clock::now();
+                        diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                        // проверим, не прошла ли минута
+                        if(diff.count() < SECONDS_MINUTE) {
+                                // проверим число запросов в минуту
+                                if(num_stream_proposal >= max_num_stream_proposal) {
+                                        // число запросов слишком большое, ждем конца минуты
+                                        while(true) {
+                                                stop = std::chrono::steady_clock::now();
+                                                std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                                                if(diff.count() >= SECONDS_MINUTE) {
+                                                        // минута прошла, уходим из ожидания
+                                                        start = std::chrono::steady_clock::now();
+                                                        stop = std::chrono::steady_clock::now();
+                                                        num_stream_proposal = 0;
+                                                        break;
+                                                }
+                                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                                        } // while
+                                } // if
+                        } else {
+                                // минута прошла, обнуляем переменные
+                                start = std::chrono::steady_clock::now();
+                                stop = std::chrono::steady_clock::now();
+                                num_stream_proposal = 0;
+                        }
+                        /*
+                         */
                         err_data = init_stream_proposal(symbols_[i],
                                                         amount,
                                                         SELL,
@@ -847,6 +930,36 @@ public:
                                         symbols_[i] << " SELL " << std::endl;
                                 return err_data;
                         }
+                        /* проверим ограничения на подписку о процентах выплат
+                         */
+                        num_stream_proposal++; // увеличим число запросов
+                        stop = std::chrono::steady_clock::now();
+                        diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                        // проверим, не прошла ли минута
+                        if(diff.count() < SECONDS_MINUTE) {
+                                // проверим число запросов в минуту
+                                if(num_stream_proposal >= max_num_stream_proposal) {
+                                        // число запросов слишком большое, ждем конца минуты
+                                        while(true) {
+                                                stop = std::chrono::steady_clock::now();
+                                                std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                                                if(diff.count() >= SECONDS_MINUTE) {
+                                                        // минута прошла, уходим из ожидания
+                                                        start = std::chrono::steady_clock::now();
+                                                        stop = std::chrono::steady_clock::now();
+                                                        num_stream_proposal = 0;
+                                                        break;
+                                                }
+                                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                                        } // while
+                                } // if
+                        } else {
+                                start = std::chrono::steady_clock::now();
+                                stop = std::chrono::steady_clock::now();
+                                num_stream_proposal = 0;
+                        }
+                        /*
+                         */
                 }
                 std::unique_lock<std::recursive_mutex> locker(flag_proposal_lock_);
                 is_stream_proposal = true;
