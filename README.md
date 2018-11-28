@@ -78,7 +78,7 @@ int main() {
 }
 ```
 
-[example_1](doc/example_1.png)
+![example_1](doc/example_1.png)
 
 ### Зависимости
 
