@@ -68,7 +68,6 @@ private:
         std::recursive_mutex connection_lock_;
         bool is_open_connection_ = false; // состояние соединения
         std::queue<std::string> send_queue_; // Очередь сообщений
-        bool is_add_delay = false;
 
         std::string token_ = "";
         bool is_error_token_ = false;
@@ -139,9 +138,17 @@ private:
                                 // попробуем еще раз
                                 std::string message = j["echo_req"].dump();
                                 std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                if((*j_error)["code"] == "RateLimit")
-                                        is_add_delay = true;
-                                send_queue_.push(message);
+                                if((*j_error)["code"] == "RateLimit") {
+                                        // отправим сообщение повторно с задержкой
+                                        std::thread([&,message]{
+                                                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                send_queue_.push(message);
+                                        }).detach();
+                                } else {
+                                        std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                        send_queue_.push(message);
+                                }
                         } else {
                                 std::unique_lock<std::recursive_mutex> locker(time_lock_);
                                 last_time_ = j["time"];
@@ -163,9 +170,16 @@ private:
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
                                         std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                        if((*j_error)["code"] == "RateLimit")
-                                                is_add_delay = true;
-                                        send_queue_.push(message);
+                                        if((*j_error)["code"] == "RateLimit") {
+                                                std::thread([&,message]{
+                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                        std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                        send_queue_.push(message);
+                                                }).detach();
+                                        } else {
+                                                std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                send_queue_.push(message);
+                                        }
                                 }
                         } else {
                                 //if(j["tick"]["quote"] != nullptr) {
@@ -214,23 +228,28 @@ private:
                                    json::iterator& j_error)
         {
                 if(*j_msg_type == "candles") {
-                        std::unique_lock<std::recursive_mutex> locker(array_candles_lock_);
-                        is_array_candles = true;
+                        //is_array_candles = true;
                         if(j_error != j.end()) {
                                 if((*j_error)["code"] == "RateLimit") {
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
-                                        std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                        send_queue_.push(message);
-                                        is_add_delay = true;
+                                        std::thread([&,message]{
+                                                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                send_queue_.push(message);
+                                        }).detach();
                                 } else {
+                                        std::unique_lock<std::recursive_mutex> locker(array_candles_lock_);
+                                        is_array_candles = true;
                                         is_array_candles_error = true;
                                 }
                         } else {
+                                std::unique_lock<std::recursive_mutex> locker(array_candles_lock_);
                                 auto it_candles = j.find("candles");
                                 if(it_candles != j.end()) {
                                         array_candles = *it_candles;
                                 }
+                                is_array_candles = true;
                                 is_array_candles_error = false;
                         }
                         return true;
@@ -246,20 +265,25 @@ private:
                 // получили сообщение авторизации
                 if(*j_msg_type == "authorize") {
                         if(j_error != j.end()) {
-                                std::unique_lock<std::recursive_mutex> locker(balance_lock_);
-                                is_authorize_ = false;
                                 // попробуем еще раз залогиниться
                                 std::string message = j["echo_req"].dump();
-                                std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                if((*j_error)["code"] == "RateLimit")
-                                        is_add_delay = true;
-                                else
-                                if((*j_error)["code"] == "InvalidToken") {
-                                        std::unique_lock<std::recursive_mutex> locker(connection_lock_);
-                                        is_error_token_ = true;
-                                        return true;
+                                if((*j_error)["code"] == "RateLimit") {
+                                        std::thread([&,message]{
+                                                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                send_queue_.push(message);
+                                        }).detach();
+                                } else {
+                                        if((*j_error)["code"] == "InvalidToken") {
+                                                std::unique_lock<std::recursive_mutex> locker(connection_lock_);
+                                                is_error_token_ = true;
+                                                return true;
+                                        }
+                                        std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                        send_queue_.push(message);
                                 }
-                                send_queue_.push(message);
+                                std::unique_lock<std::recursive_mutex> locker(balance_lock_);
+                                is_authorize_ = false;
                         } else {
                                 std::unique_lock<std::recursive_mutex> locker(balance_lock_);
                                 balance_ = atof((j["authorize"]["balance"].get<std::string>()).c_str());
@@ -297,10 +321,19 @@ private:
                                         }
                                         // отправим сообщение о подписки на выплаты
                                         std::string message = j["echo_req"].dump();
-                                        std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
-                                        if((*j_error)["code"] == "RateLimit")
-                                                is_add_delay = true;
-                                        send_queue_.push(message);
+                                        if((*j_error)["code"] == "RateLimit" ||
+                                          (*j_error)["code"] == "ContractBuyValidationError") {
+                                                // отправляем сообщение с задержкой
+                                                std::thread([&,message]{
+                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                        std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                        send_queue_.push(message);
+                                                }).detach();
+                                        } else {
+                                                // отправляем сообщение мгновенно
+                                                std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
+                                                send_queue_.push(message);
+                                        }
                                 }
                                 auto it_contract_type = (*it_echo_req).find("contract_type");
                                 if(*it_contract_type == "CALL") {
@@ -430,11 +463,6 @@ public:
                                 std::unique_lock<std::recursive_mutex> locker(connection_lock_);
                                 if(is_open_connection_) {
                                         std::unique_lock<std::recursive_mutex> locker(send_queue_lock_);
-                                        // добавим задержку, если нужно
-                                        if(is_add_delay) {
-                                                std::this_thread::sleep_for(std::chrono::seconds(1));
-                                                is_add_delay = false;
-                                        }
                                         // отправим сообщение, если есть что отправлять
                                         if(send_queue_.size() > 0) {
                                                 std::string message = send_queue_.front();
@@ -833,7 +861,7 @@ public:
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
 
-        int get_stream_proposal(std::vector<double> &buy_data,
+        inline int get_stream_proposal(std::vector<double> &buy_data,
                                 std::vector<double> &sell_data)
         {
                 std::unique_lock<std::recursive_mutex> locker_fq(flag_proposal_lock_);
