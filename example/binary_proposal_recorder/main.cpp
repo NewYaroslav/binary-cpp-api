@@ -10,6 +10,8 @@ std::vector<std::string> get_all_symbols_binary();
 int main() {
         BinaryApi iBinaryApi;
         BinaryApi iBinaryApiForTime;
+        std::this_thread::sleep_for(std::chrono::milliseconds(4500));
+        //return 0;
         std::vector<std::string> symbols = get_all_symbols_binary();
         // инициализируем список валютных пар
         std::cout << "init_symbols..." << std::endl;
