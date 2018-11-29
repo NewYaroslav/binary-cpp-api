@@ -6,7 +6,7 @@
 
 Данная *header-only* библиотека содержит класс для взаимодействия с Binary.com WebSocket API v3. [https://developers.binary.com/api/](https://developers.binary.com/api/). 
 
-На данный момент библиотека продолжает разрабатываться.
+На данный момент библиотека находится в разработке
 
 ### Как пользоваться?
 
