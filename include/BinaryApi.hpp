@@ -88,8 +88,8 @@ private:
         sf::contfree_safe_ptr<std::vector<std::vector<double>>> close_data_;
         sf::contfree_safe_ptr<std::vector<std::vector<unsigned long long>>> time_data_;
 
-        bool is_stream_quotations = false;
-        bool is_stream_proposal = false;
+        bool is_stream_quotations_ = false;
+        bool is_stream_proposal_ = false;
         std::recursive_mutex flag_quotations_lock_; // для флага потока котировок
         std::recursive_mutex flag_proposal_lock_;
         std::recursive_mutex symbols_lock_;
@@ -455,8 +455,8 @@ public:
                                 std::unique_lock<std::recursive_mutex> locker_q(flag_quotations_lock_);
                                 std::unique_lock<std::recursive_mutex> locker_p(flag_proposal_lock_);
                                 std::unique_lock<std::recursive_mutex> locker_t(time_lock_);
-                                is_stream_quotations = false;
-                                is_stream_proposal = false;
+                                is_stream_quotations_ = false;
+                                is_stream_proposal_ = false;
                                 is_last_time = false;
                                 std::this_thread::sleep_for(std::chrono::seconds(5));
                         }
@@ -756,7 +756,7 @@ public:
                 int err_data = send_json(j);
                 std::unique_lock<std::recursive_mutex> locker(flag_quotations_lock_);
                 if(err_data == OK)
-                        is_stream_quotations = true;
+                        is_stream_quotations_ = true;
                 return err_data;
         }
 //------------------------------------------------------------------------------
@@ -768,7 +768,7 @@ public:
                 json j;
                 j["forget_all"] = "ticks";
                 std::unique_lock<std::recursive_mutex> locker(flag_quotations_lock_);
-                is_stream_quotations = false;
+                is_stream_quotations_ = false;
                 return send_json(j);
         }
 //------------------------------------------------------------------------------
@@ -782,7 +782,7 @@ public:
                                          std::vector<std::vector<unsigned long long>> &time_data)
         {
                 flag_quotations_lock_.lock();
-                if(symbols_.size() == 0 || !is_stream_quotations)
+                if(symbols_.size() == 0 || !is_stream_quotations_)
                         return NO_INIT;
                 flag_quotations_lock_.unlock();
                 close_data = std::vector<std::vector<double>>(close_data_->begin(), close_data_->end());
@@ -810,7 +810,7 @@ public:
         {
                 std::unique_lock<std::recursive_mutex> locker_t(time_lock_);
                 std::unique_lock<std::recursive_mutex> locker_q(flag_quotations_lock_);
-                if(is_last_time || is_stream_quotations) {
+                if(is_last_time || is_stream_quotations_) {
                         timestamp = last_time_;
                         is_last_time = false;
                         return OK;
@@ -975,7 +975,7 @@ public:
                          */
                 }
                 std::unique_lock<std::recursive_mutex> locker(flag_proposal_lock_);
-                is_stream_proposal = true;
+                is_stream_proposal_ = true;
                 return OK;
         }
 //------------------------------------------------------------------------------
@@ -990,10 +990,9 @@ public:
                                        std::vector<double> &sell_data)
         {
                 flag_proposal_lock_.lock();
-                if(symbols_.size() == 0 || !is_stream_proposal)
+                if(symbols_.size() == 0 || !is_stream_proposal_)
                         return NO_INIT;
                 flag_proposal_lock_.unlock();
-                //std::unique_lock<std::recursive_mutex> locker_q(proposal_lock_);
                 buy_data = std::vector<double>(proposal_buy_->begin(), proposal_buy_->end());
                 sell_data = std::vector<double>(proposal_sell_->begin(), proposal_sell_->end());
                 return OK;
@@ -1007,8 +1006,28 @@ public:
                 json j;
                 j["forget_all"] = "proposal";
                 std::unique_lock<std::recursive_mutex> locker(flag_proposal_lock_);
-                is_stream_proposal = false;
+                is_stream_proposal_ = false;
                 return send_json(j);
+        }
+//------------------------------------------------------------------------------
+        /** \brief Состояние потока процентов выплат
+         * Потоки могут оборваться после сброса соединения с сервером
+         * \return флаг активности потока процентов выплат
+         */
+        inline bool is_proposal_stream()
+        {
+                std::unique_lock<std::recursive_mutex> locker(flag_proposal_lock_);
+                return is_stream_proposal_;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Состояние потока котировок
+         * Потоки могут оборваться после сброса соединения с сервером
+         * \return флаг активности потока котировок
+         */
+        inline bool is_quotations_stream()
+        {
+                std::unique_lock<std::recursive_mutex> locker(flag_quotations_lock_);
+                return is_stream_quotations_;
         }
 };
 

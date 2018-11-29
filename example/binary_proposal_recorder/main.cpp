@@ -15,14 +15,10 @@ int main() {
         std::cout << "init_symbols..." << std::endl;
         iBinaryApi.init_symbols(symbols);
         // инициализируем поток процентов выплат
-        std::cout << "init_stream_proposal..." << std::endl;
         const double amount = 10;
         const int duration = 3;
         const int duration_uint = BinaryApi::MINUTES;
         const std::string currency = "USD";
-        int err_data = iBinaryApi.init_stream_proposal(amount, duration, duration_uint, currency);
-        std::cout << "err: " << err_data << std::endl;
-
         std::cout << "..." << std::endl;
         unsigned long long servertime_last = 0;
 
@@ -31,6 +27,15 @@ int main() {
                 std::vector<double> buy_data; // проценты выплат
                 std::vector<double> sell_data;
                 unsigned long long servertime = 0;
+
+                if(!iBinaryApi.is_proposal_stream()) {
+                        // инициализируем поток процентов выплат
+                        std::cout << "init_stream_proposal..." << std::endl;
+                        int err_data = iBinaryApi.init_stream_proposal(amount, duration, duration_uint, currency);
+                        std::cout << "err: " << err_data << std::endl;
+                        if(err_data != iBinaryApi.OK)
+                                continue;
+                }
 
                 if(iBinaryApiForTime.get_servertime(servertime) != iBinaryApiForTime.OK) {
                         iBinaryApiForTime.request_servertime();
