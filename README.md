@@ -84,8 +84,12 @@ int main() {
 
 В архиве bin.7z содержится программа *binary_proposal_recorder.exe*, которая записывает каждую секунду проценты выплат с валютных пар (WLDAUD...WLDUSD, AUDCAD, AUDCHF, AUDJPY, AUDNZD, AUDUSD, EURAUD, EURCAD, EURCHF, EURGBP, EURJPY, EURNZD, EURUSD, GBPAUD, GBPCAD, GBPCHF, GBPJPY)
 Проценты выплат записываются для сделок PUT и CALL с временем экспирации 3 минуты. Для расчета процента используется ставка 10 USD.
-Данные записываются в виде JSON строки в файлы в папке data. Каждый файл соответствует конкретной дате и название файла формируется из даты, когда он был записан (например *proposal_29_11_2018.json*).
+Данные записываются в виде JSON строки в файлы в папке data. Каждый файл соответствует конкретной дате и название файла формируется из даты, когда он был записан (например *proposal_29_11_2018.json*). Время для каждой структуры JSON указано в виде timestamp, ключ *time*, используется время сервера Binary (GMT).
 Максимальное число строк в файле соответствует количеству секунд одного дня. 
+Пример JSON строки:
+```json
+{"amount":10.0,"currency":"USD","data":[{"buy":0.8440000000000001,"sell":0.895,"symbol":"WLDAUD"},{"buy":0.7949999999999999,"sell":0.815,"symbol":"WLDEUR"},{"buy":0.7879999999999998,"sell":0.8850000000000002,"symbol":"WLDGBP"},{"buy":0.802,"sell":0.802,"symbol":"WLDUSD"},{"buy":0.7370000000000001,"sell":0.9710000000000001,"symbol":"frxAUDCAD"},{"buy":0.8079999999999998,"sell":0.8859999999999999,"symbol":"frxAUDCHF"},{"buy":0.8350000000000002,"sell":0.887,"symbol":"frxAUDJPY"},{"buy":0.702,"sell":1.0059999999999998,"symbol":"frxAUDNZD"},{"buy":0.784,"sell":0.889,"symbol":"frxAUDUSD"},{"buy":0.855,"sell":0.815,"symbol":"frxEURAUD"},{"buy":0.7570000000000001,"sell":0.8489999999999998,"symbol":"frxEURCAD"},{"buy":0.9120000000000001,"sell":0.7030000000000001,"symbol":"frxEURCHF"},{"buy":0.8559999999999999,"sell":0.0,"symbol":"frxEURGBP"},{"buy":0.0,"sell":0.0,"symbol":"frxEURJPY"},{"buy":0.0,"sell":0.0,"symbol":"frxEURNZD"},{"buy":0.0,"sell":0.0,"symbol":"frxEURUSD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPAUD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPCAD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPCHF"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPJPY"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPNZD"},{"buy":0.0,"sell":0.0,"symbol":"frxNZDUSD"},{"buy":0.0,"sell":0.0,"symbol":"frxUSDCAD"},{"buy":0.0,"sell":0.0,"symbol":"frxUSDJPY"}],"data_type":"proposal","duration":3,"duration_unit":2,"time":1543463936}
+```
 
 ### Зависимости
 
