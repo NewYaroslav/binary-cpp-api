@@ -26,6 +26,7 @@
 //------------------------------------------------------------------------------
 #include <client_wss.hpp>
 #include <nlohmann/json.hpp>
+#include <safe_ptr.h>
 #include <thread>
 #include <string>
 #include <vector>
@@ -80,17 +81,17 @@ private:
         std::recursive_mutex balance_lock_;
         // поток выплат и котировок
         std::vector<std::string> symbols_;
-        std::unordered_map<std::string, int> map_symbol_;
-        std::vector<double> proposal_buy_;
-        std::vector<double> proposal_sell_;
-        std::vector<std::vector<double>> close_data_;
-        std::vector<std::vector<unsigned long long>> time_data_;
+        typedef sf::safe_obj<int, sf::spinlock_t> map_symbol_obj_t;
+        sf::contfree_safe_ptr<std::unordered_map<std::string, map_symbol_obj_t>> map_symbol_;
+        sf::contfree_safe_ptr<std::vector<double>> proposal_buy_;
+        sf::contfree_safe_ptr<std::vector<double>> proposal_sell_;
+        sf::contfree_safe_ptr<std::vector<std::vector<double>>> close_data_;
+        sf::contfree_safe_ptr<std::vector<std::vector<unsigned long long>>> time_data_;
+
         bool is_stream_quotations = false;
         bool is_stream_proposal = false;
         std::recursive_mutex flag_quotations_lock_; // для флага потока котировок
         std::recursive_mutex flag_proposal_lock_;
-        std::recursive_mutex proposal_lock_;
-        std::recursive_mutex quotations_lock_; // для данных потока котировок
         std::recursive_mutex symbols_lock_;
         // время сервера
         unsigned long long last_time_ = 0;
@@ -189,27 +190,28 @@ private:
                                 std::string symbol = (*it_tick)["symbol"];                                          // символ
                                 unsigned long long lastepoch = (epoch/60)*60;                                               // время послденей закрытой свечи
 
-                                std::unique_lock<std::recursive_mutex> locker_quotations(quotations_lock_);
-                                std::unique_lock<std::recursive_mutex> locker_proposal(proposal_lock_);
-                                if(map_symbol_.find(symbol) == map_symbol_.end())
+                                auto it_symbol = slock_safe_ptr(map_symbol_)->find(symbol);
+                                if(it_symbol == map_symbol_->cend())
                                         return true;
-
-                                int indx = map_symbol_[symbol];
-                                if(indx >= 0 && indx < (int)close_data_.size()) {
+                                int indx = xlock_safe_ptr(it_symbol->second);
+                                auto s_safe_close_data_ = slock_safe_ptr(close_data_);
+                                if(indx >= 0 && indx < (int)s_safe_close_data_->size()) {
                                         if(epoch % 60 == 0) {
-                                                close_data_[indx].push_back(quote);
-                                                time_data_[indx].push_back(epoch);
+                                                //close_data_[indx].push_back(quote);
+                                                //time_data_[indx].push_back(epoch);
+                                                close_data_->at(indx).push_back(quote);
+                                                time_data_->at(indx).push_back(epoch);
                                         } else
-                                        if(close_data_[indx].size() > 0) {
-                                                if(lastepoch > time_data_[indx].back()) {
-                                                        close_data_[indx].push_back(quote);
-                                                        time_data_[indx].push_back(lastepoch);
+                                        if(s_safe_close_data_->size() > 0) {
+                                                if(lastepoch > time_data_->at(indx).back()) {
+                                                        close_data_->at(indx).push_back(quote);
+                                                        time_data_->at(indx).push_back(lastepoch);
                                                 } else {
-                                                        close_data_[indx][close_data_[indx].size() - 1] = quote;
-                                            }
+                                                        close_data_->at(indx).at(close_data_->at(indx).size() - 1) = quote;
+                                                }
                                         } else {
-                                                close_data_[indx].push_back(quote);
-                                                time_data_[indx].push_back(lastepoch);
+                                                close_data_->at(indx).push_back(quote);
+                                                time_data_->at(indx).push_back(lastepoch);
                                         }
                                         std::unique_lock<std::recursive_mutex> locker_time(time_lock_);
                                         last_time_ = std::max(epoch, last_time_);
@@ -305,10 +307,10 @@ private:
                 if(*j_msg_type == "proposal" &&
                         (*it_echo_req)["subscribe"] == 1) {
                         std::string _symbol = (*it_echo_req)["symbol"];
-                        std::unique_lock<std::recursive_mutex> locker_proposal(proposal_lock_);
-                        std::unique_lock<std::recursive_mutex> locker_quotations(quotations_lock_);
-                        if(map_symbol_.find(_symbol) != map_symbol_.end()) {
-                                int indx = map_symbol_[_symbol];
+                        auto it_symbol = slock_safe_ptr(map_symbol_)->find(_symbol);
+                        if(it_symbol != map_symbol_->cend()) {
+                                //int indx = map_symbol_[_symbol];
+                                int indx = xlock_safe_ptr(it_symbol->second);
                                 double temp = 0.0;
                                 if(j_error == j.end()) {
                                         auto it_proposal = j.find("proposal");
@@ -325,7 +327,7 @@ private:
                                           (*j_error)["code"] == "ContractBuyValidationError") {
                                                 // отправляем сообщение с задержкой
                                                 std::thread([&,message]{
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                        std::this_thread::sleep_for(std::chrono::milliseconds(2500));
                                                         std::unique_lock<std::recursive_mutex> locker_send(send_queue_lock_);
                                                         send_queue_.push(message);
                                                 }).detach();
@@ -337,10 +339,15 @@ private:
                                 }
                                 auto it_contract_type = (*it_echo_req).find("contract_type");
                                 if(*it_contract_type == "CALL") {
-                                        proposal_buy_[indx] = temp;
+                                        //auto s_safe_buy = slock_safe_ptr(proposal_buy_);
+                                        proposal_buy_->at(indx) = temp;
+                                        //auto x_temp = xlock_safe_ptr(s_safe_buy->at(indx));
+                                        //x_temp-> = temp;
+                                        //proposal_buy_[indx] = temp;
                                 } else
                                 if(*it_contract_type == "PUT") {
-                                        proposal_sell_[indx] = temp;
+                                        //proposal_sell_[indx] = temp;
+                                        proposal_sell_->at(indx) = temp;
                                 } // if
                         } //if map_proposal_symbol
                         return true;
@@ -403,8 +410,8 @@ public:
                                 j["ping"] = (int)1;
                         }
                         std::string message = j.dump();
-                        std::cout << "BinaryApi: Sending message: \"" <<
-                                message << "\"" << std::endl;
+                        //std::cout << "BinaryApi: Sending message: \"" <<
+                        //        message << "\"" << std::endl;
                         connection->send(message);
 
                         is_open_connection_ = true;
@@ -522,6 +529,7 @@ public:
                                                         j["ping"] = 1;
                                                         std::string message = j.dump();
                                                         send_queue_lock_.lock();
+                                                        //std::cout << "ping" << std::endl;
                                                         send_queue_.push(message);
                                                         send_queue_lock_.unlock();
                                                         start = std::chrono::steady_clock::now();
@@ -540,14 +548,14 @@ public:
 
                 while(true) {
                         if(token_ != "") {
-                                std::unique_lock<std::recursive_mutex> locker(balance_lock_);
+                                std::unique_lock<std::recursive_mutex> locker_b(balance_lock_);
                                 if(is_authorize_)
                                         break;
-                                std::unique_lock<std::recursive_mutex> locker2(connection_lock_);
+                                std::unique_lock<std::recursive_mutex> locker_c(connection_lock_);
                                 if(is_error_token_)
                                         break;
                         } else {
-                                std::unique_lock<std::recursive_mutex> locker(connection_lock_);
+                                std::unique_lock<std::recursive_mutex> locker_c(connection_lock_);
                                 if(is_open_connection_)
                                         break;
                         }
@@ -709,21 +717,19 @@ public:
          */
         inline void init_symbols(std::vector<std::string> &symbols)
         {
-                std::unique_lock<std::recursive_mutex> locker_p(proposal_lock_);
-                std::unique_lock<std::recursive_mutex> locker_q(quotations_lock_);
                 symbols_ = symbols;
-                map_symbol_.clear();
-                close_data_.clear();
-                time_data_.clear();
-                proposal_buy_.clear();
-                proposal_sell_.clear();
+                map_symbol_->clear();
+                close_data_->clear();
+                time_data_->clear();
+                proposal_buy_->clear();
+                proposal_sell_->clear();
 
-                close_data_.resize(symbols.size());
-                time_data_.resize(symbols.size());
-                proposal_buy_.resize(symbols.size());
-                proposal_sell_.resize(symbols.size());
+                close_data_->resize(symbols.size());
+                time_data_->resize(symbols.size());
+                proposal_buy_->resize(symbols.size());
+                proposal_sell_->resize(symbols.size());
                 for(size_t i = 0; i < symbols.size(); ++i) {
-                        map_symbol_[symbols[i]] = i;
+                        map_symbol_->emplace(symbols[i], i);
                 }
         }
 //------------------------------------------------------------------------------
@@ -736,8 +742,7 @@ public:
                 if(symbols_.size() == 0)
                         return NO_INIT;
                 for(size_t i = 0; i < symbols_.size(); ++i) {
-                        std::unique_lock<std::recursive_mutex> locker(quotations_lock_);
-                        int err_data = get_candles(symbols_[i], init_size, close_data_[i], time_data_[i], 0, 0);
+                        int err_data = get_candles(symbols_[i], init_size, close_data_->at(i), time_data_->at(i), 0, 0);
                         if(err_data != OK)
                                 return err_data;
                 }
@@ -776,12 +781,12 @@ public:
         inline int get_stream_quotations(std::vector<std::vector<double>> &close_data,
                                          std::vector<std::vector<unsigned long long>> &time_data)
         {
-                std::unique_lock<std::recursive_mutex> locker_fq(flag_quotations_lock_);
+                flag_quotations_lock_.lock();
                 if(symbols_.size() == 0 || !is_stream_quotations)
                         return NO_INIT;
-                std::unique_lock<std::recursive_mutex> locker_q(quotations_lock_);
-                close_data = close_data_;
-                time_data = time_data_;
+                flag_quotations_lock_.unlock();
+                close_data = std::vector<std::vector<double>>(close_data_->begin(), close_data_->end());
+                time_data = std::vector<std::vector<unsigned long long>>(time_data_->begin(), time_data_->end());
                 return OK;
         }
 //------------------------------------------------------------------------------
@@ -803,8 +808,8 @@ public:
          */
         inline int get_servertime(unsigned long long &timestamp)
         {
-                std::unique_lock<std::recursive_mutex> locker(time_lock_);
-                std::unique_lock<std::recursive_mutex> locker2(flag_quotations_lock_);
+                std::unique_lock<std::recursive_mutex> locker_t(time_lock_);
+                std::unique_lock<std::recursive_mutex> locker_q(flag_quotations_lock_);
                 if(is_last_time || is_stream_quotations) {
                         timestamp = last_time_;
                         is_last_time = false;
@@ -884,9 +889,12 @@ public:
                                                             duration_unit,
                                                             currency);
                         if(err_data != OK) {
-                                std::cout << "BinaryApi: init_stream_proposal error! Message: " <<
+                                std::cout << "BinaryApi: init stream proposal error! Message: " <<
                                         symbols_[i] << " BUY " << std::endl;
                                 return err_data;
+                        } else {
+                                std::cout << "BinaryApi: init stream proposal " <<
+                                        symbols_[i] << " BUY " << std::endl;
                         }
                         /* проверим ограничения на подписку о процентах выплат
                          */
@@ -897,6 +905,7 @@ public:
                         if(diff.count() < SECONDS_MINUTE) {
                                 // проверим число запросов в минуту
                                 if(num_stream_proposal >= max_num_stream_proposal) {
+                                        std::cout << "BinaryApi: init stream proposal wait..." << std::endl;
                                         // число запросов слишком большое, ждем конца минуты
                                         while(true) {
                                                 stop = std::chrono::steady_clock::now();
@@ -926,9 +935,12 @@ public:
                                                         duration_unit,
                                                         currency);
                         if(err_data != OK) {
-                                std::cout << "BinaryApi: init_stream_proposal error! Message: " <<
+                                std::cout << "BinaryApi: init streamn proposal error! Message: " <<
                                         symbols_[i] << " SELL " << std::endl;
                                 return err_data;
+                        } else {
+                                std::cout << "BinaryApi: init stream proposal " <<
+                                        symbols_[i] << " SELL " << std::endl;
                         }
                         /* проверим ограничения на подписку о процентах выплат
                          */
@@ -939,6 +951,7 @@ public:
                         if(diff.count() < SECONDS_MINUTE) {
                                 // проверим число запросов в минуту
                                 if(num_stream_proposal >= max_num_stream_proposal) {
+                                        std::cout << "BinaryApi: init stream proposal wait..." << std::endl;
                                         // число запросов слишком большое, ждем конца минуты
                                         while(true) {
                                                 stop = std::chrono::steady_clock::now();
@@ -973,16 +986,16 @@ public:
          * \param sell_data проценты выплат по сделкам SELL для всех валютных пар
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
-
         inline int get_stream_proposal(std::vector<double> &buy_data,
-                                std::vector<double> &sell_data)
+                                       std::vector<double> &sell_data)
         {
-                std::unique_lock<std::recursive_mutex> locker_fq(flag_proposal_lock_);
+                flag_proposal_lock_.lock();
                 if(symbols_.size() == 0 || !is_stream_proposal)
                         return NO_INIT;
-                std::unique_lock<std::recursive_mutex> locker_q(proposal_lock_);
-                buy_data = proposal_buy_;
-                sell_data = proposal_sell_;
+                flag_proposal_lock_.unlock();
+                //std::unique_lock<std::recursive_mutex> locker_q(proposal_lock_);
+                buy_data = std::vector<double>(proposal_buy_->begin(), proposal_buy_->end());
+                sell_data = std::vector<double>(proposal_sell_->begin(), proposal_sell_->end());
                 return OK;
         }
 //------------------------------------------------------------------------------
