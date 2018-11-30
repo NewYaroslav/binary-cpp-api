@@ -55,7 +55,7 @@ public:
                 BUY = 1,
                 SELL = -1,
         };
-        // типы длительности контракта
+        // длительности контракта
         enum DurationType {
                 TICKS = 0,
                 SECONDS = 1,

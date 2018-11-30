@@ -30,6 +30,7 @@ int main() {
         const std::string folder_name = j_settings["folder"];
         const std::string disk_name = j_settings["disk"];
         const std::string path = j_settings["path"];
+        int is_use_git = j_settings["git"];
         std::string old_file_name = "";
         std::cout << "..." << std::endl;
         unsigned long long servertime_last = 0;
@@ -91,15 +92,23 @@ int main() {
                         const std::string file_name = _folder_name + "\\" +
                                                       file_chunk_name +
                                                       ".json";
-                        std::ofstream o(file_name, std::ios::app);
-                        o << j.dump() << std::endl;
-                        o.close();
-                        if(old_file_name != file_name) {
-                                old_file_name = file_name;
+                        // если не выходной, сохраняем файлы
+                        if(!xtime::is_day_off(servertime)) {
+                                std::ofstream o(file_name, std::ios::app);
+                                o << j.dump() << std::endl;
+                                o.close();
+                        }
+
+                        if(old_file_name != file_name && is_use_git) {
                                 std::thread make_thread([=]() {
-                                        make_commit(disk_name, path, file_name);
+                                        if(old_file_name == "") {
+                                                make_commit(disk_name, path, file_name);
+                                        } else {
+                                                make_commit(disk_name, path, old_file_name);
+                                        }
                                 });
                                 make_thread.detach();
+                                old_file_name = file_name;
                         }
                 }
 #               endif
@@ -116,7 +125,7 @@ std::vector<std::string> get_all_symbols_binary() {
         vsymbol.push_back("WLDEUR");
         vsymbol.push_back("WLDGBP");
         vsymbol.push_back("WLDUSD");
-/*
+
         vsymbol.push_back("frxAUDCAD");
         vsymbol.push_back("frxAUDCHF");
         vsymbol.push_back("frxAUDJPY");
@@ -135,7 +144,7 @@ std::vector<std::string> get_all_symbols_binary() {
         vsymbol.push_back("frxGBPCAD");
         vsymbol.push_back("frxGBPCHF");
         vsymbol.push_back("frxGBPJPY");
-        */
+
         //vsymbol.push_back("frxGBPNOK");
         vsymbol.push_back("frxGBPNZD");
         //vsymbol.push_back("frxGBPPLN");
@@ -157,25 +166,28 @@ void make_commit(std::string disk, std::string path, std::string new_file)
 {
         std::string str_return_hd = "cd " + disk + ":\\";
         std::cout << str_return_hd << std::endl;
-        system(str_return_hd.c_str());
+        //system(str_return_hd.c_str());
 
         std::string str_cd_path = "cd " + path;
         std::cout << str_cd_path << std::endl;
-        system(str_cd_path.c_str());
+        //system(str_cd_path.c_str());
 
         std::string str_git_add = "git add " + new_file;
         std::cout << str_git_add << std::endl;
-        system(str_git_add.c_str());
+        //system(str_git_add.c_str());
 
         std::string str_git_commit = "git commit -a -m \"update\"";
         std::cout << str_git_commit << std::endl;
-        system(str_git_commit.c_str());
+        //system(str_git_commit.c_str());
 
         std::string str_git_pull = "git pull";
         std::cout << str_git_pull << std::endl;
-        system(str_git_pull.c_str());
+        //system(str_git_pull.c_str());
 
         std::string str_git_push = "git push";
         std::cout << str_git_push << std::endl;
-        system(str_git_push.c_str());
+        //system(str_git_push.c_str());
+
+        std::string msg = str_return_hd + " && " + str_cd_path + " && " + str_git_add + " && " + str_git_commit + " && " + str_git_pull + " & " + str_git_push;
+        system(msg.c_str());
 }

@@ -80,6 +80,45 @@ int main() {
 
 ![example_1](doc/example_1.png)
 
++ Варианты сделок
+
+```С++
+// типы контрактов
+enum ContractType {
+		BUY = 1, // опцион на покупку
+		SELL = -1, // опцион на продажу
+};
+
+// используется, например, в методе init_stream_proposal
+```
+
++ Возможные состояния
+
+```С++
+// варианты ошибок API
+enum ErrorType {
+		OK = 0, // процесс завершился удачно
+		NO_AUTHORIZATION = -1, // нет авторизации
+		NO_COMMAND = -2, // не было команды
+		UNKNOWN_ERROR = -3, // неизвестная ошибка
+		NO_INIT = -4, // не было инициализации
+		NO_OPEN_CONNECTION = -5, // нет соединения с сервером
+};
+```
+
++ Единицы измерения длительности контрактов
+
+```С++
+// длительности контракта
+enum DurationType {
+		TICKS = 0,
+		SECONDS = 1,
+		MINUTES = 2,
+		HOURS = 3,
+		DAYS = 4,
+};
+```
+
 ### Готовые программы для ОС Windows
 
 В архиве bin.7z содержится программа *binary_proposal_recorder.exe*, которая записывает каждую секунду проценты выплат с валютных пар (WLDAUD...WLDUSD, AUDCAD, AUDCHF, AUDJPY, AUDNZD, AUDUSD, EURAUD, EURCAD, EURCHF, EURGBP, EURJPY, EURNZD, EURUSD, GBPAUD, GBPCAD, GBPCHF, GBPJPY)
@@ -90,6 +129,22 @@ int main() {
 ```json
 {"amount":10.0,"currency":"USD","data":[{"buy":0.8440000000000001,"sell":0.895,"symbol":"WLDAUD"},{"buy":0.7949999999999999,"sell":0.815,"symbol":"WLDEUR"},{"buy":0.7879999999999998,"sell":0.8850000000000002,"symbol":"WLDGBP"},{"buy":0.802,"sell":0.802,"symbol":"WLDUSD"},{"buy":0.7370000000000001,"sell":0.9710000000000001,"symbol":"frxAUDCAD"},{"buy":0.8079999999999998,"sell":0.8859999999999999,"symbol":"frxAUDCHF"},{"buy":0.8350000000000002,"sell":0.887,"symbol":"frxAUDJPY"},{"buy":0.702,"sell":1.0059999999999998,"symbol":"frxAUDNZD"},{"buy":0.784,"sell":0.889,"symbol":"frxAUDUSD"},{"buy":0.855,"sell":0.815,"symbol":"frxEURAUD"},{"buy":0.7570000000000001,"sell":0.8489999999999998,"symbol":"frxEURCAD"},{"buy":0.9120000000000001,"sell":0.7030000000000001,"symbol":"frxEURCHF"},{"buy":0.8559999999999999,"sell":0.0,"symbol":"frxEURGBP"},{"buy":0.0,"sell":0.0,"symbol":"frxEURJPY"},{"buy":0.0,"sell":0.0,"symbol":"frxEURNZD"},{"buy":0.0,"sell":0.0,"symbol":"frxEURUSD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPAUD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPCAD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPCHF"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPJPY"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPNZD"},{"buy":0.0,"sell":0.0,"symbol":"frxNZDUSD"},{"buy":0.0,"sell":0.0,"symbol":"frxUSDCAD"},{"buy":0.0,"sell":0.0,"symbol":"frxUSDJPY"}],"data_type":"proposal","duration":3,"duration_unit":2,"time":1543463936}
 ```
+
+Настройки программы хранятся в JSON файле *settings.json*. Пример содержимого файла:
+```json
+{
+	"disk": "D", // диск, на котором находится программа
+	"path": "_repoz//binary_historical_data", // папка (репозиторий git), где будут храниться данные
+	"amount": 10.0, // ставка для расчета процентов выплат
+	"duration": 3, // время экспирации опциона
+	"duration_uint": 2, // единица измерения времени (2 - минуты)
+	"currency": "USD", // валюта счета 
+	"folder": "proposal_data" // папка, где будут храниться данные процентов выплат
+}
+```
+
+На данный момент данные по процентам выплат будут храниться в репозитории [https://github.com/NewYaroslav/binary_historical_data](https://github.com/NewYaroslav/binary_historical_data). 
+Данные репозитория будут обновляться раз в день (приблизительно в 00:00 GMT)
 
 ### Зависимости
 
