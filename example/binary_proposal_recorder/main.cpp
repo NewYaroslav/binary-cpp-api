@@ -80,14 +80,15 @@ int main() {
                                 j["data"][i]["sell"] = sell_data[i];
                         }
                         // сохраняем список
-                        mkdir(folder_name.c_str());
+                        std::string _folder_name = disk_name + ":\\" + path + "\\" + folder_name;
+                        mkdir(_folder_name.c_str());
                         xtime::DateTime iTime(servertime);
                         std::string file_chunk_name = "proposal_" +
                                                       std::to_string(iTime.day) + "_" +
                                                       std::to_string(iTime.month) + "_" +
                                                       std::to_string(iTime.year);
 
-                        const std::string file_name = folder_name + "\\" +
+                        const std::string file_name = _folder_name + "\\" +
                                                       file_chunk_name +
                                                       ".json";
                         std::ofstream o(file_name, std::ios::app);
