@@ -2,28 +2,37 @@
 #include "xtime.hpp"
 #include <fstream>
 #include <dir.h>
+#include <stdlib.h>
 
 using json = nlohmann::json;
 
 std::vector<std::string> get_all_symbols_binary();
+void make_commit(std::string disk, std::string path, std::string new_file);
 
 int main() {
         BinaryApi iBinaryApi;
         BinaryApi iBinaryApiForTime;
-        std::this_thread::sleep_for(std::chrono::milliseconds(4500));
-        //return 0;
+        json j_settings;
+        std::ifstream i("settings.json");
+        i >> j_settings;
+        i.close();
+        std::cout << std::setw(4) << j_settings << std::endl;
+
         std::vector<std::string> symbols = get_all_symbols_binary();
         // инициализируем список валютных пар
         std::cout << "init_symbols..." << std::endl;
         iBinaryApi.init_symbols(symbols);
         // инициализируем поток процентов выплат
-        const double amount = 10;
-        const int duration = 3;
-        const int duration_uint = BinaryApi::MINUTES;
-        const std::string currency = "USD";
+        const double amount = j_settings["amount"];
+        const int duration = j_settings["duration"];
+        const int duration_uint = j_settings["duration_uint"];
+        const std::string currency = j_settings["currency"];
+        const std::string folder_name = j_settings["folder"];
+        const std::string disk_name = j_settings["disk"];
+        const std::string path = j_settings["path"];
+        std::string old_file_name = "";
         std::cout << "..." << std::endl;
         unsigned long long servertime_last = 0;
-
         while(true) {
                 // для всех валютных пар
                 std::vector<double> buy_data; // проценты выплат
@@ -59,11 +68,11 @@ int main() {
                         }
                         // составляем список
                         json j;
-                        j["data_type"] = "proposal";
-                        j["duration"] = duration;
-                        j["duration_unit"] = duration_uint;
-                        j["amount"] = amount;
-                        j["currency"] = currency;
+                        //j["data_type"] = "proposal";
+                        //j["duration"] = duration;
+                        //j["duration_unit"] = duration_uint;
+                        //j["amount"] = amount;
+                        //j["currency"] = currency;
                         j["time"] = servertime;
                         for(size_t i = 0; i < symbols.size(); ++i) {
                                 j["data"][i]["symbol"] = symbols[i];
@@ -71,16 +80,26 @@ int main() {
                                 j["data"][i]["sell"] = sell_data[i];
                         }
                         // сохраняем список
-                        mkdir("data");
+                        mkdir(folder_name.c_str());
                         xtime::DateTime iTime(servertime);
-                        const std::string file_name = "data\\proposal_" +
+                        std::string file_chunk_name = "proposal_" +
                                                       std::to_string(iTime.day) + "_" +
                                                       std::to_string(iTime.month) + "_" +
-                                                      std::to_string(iTime.year) +
+                                                      std::to_string(iTime.year);
+
+                        const std::string file_name = folder_name + "\\" +
+                                                      file_chunk_name +
                                                       ".json";
                         std::ofstream o(file_name, std::ios::app);
                         o << j.dump() << std::endl;
                         o.close();
+                        if(old_file_name != file_name) {
+                                old_file_name = file_name;
+                                std::thread make_thread([=]() {
+                                        make_commit(disk_name, path, file_name);
+                                });
+                                make_thread.detach();
+                        }
                 }
 #               endif
                 // время сервера в GMT\UTC
@@ -130,4 +149,31 @@ std::vector<std::string> get_all_symbols_binary() {
         //vsymbol.push_back("frxUSDPLN");
         //vsymbol.push_back("frxUSDSEK");
         return vsymbol;
+}
+
+void make_commit(std::string disk, std::string path, std::string new_file)
+{
+        std::string str_return_hd = "cd " + disk + ":\\";
+        std::cout << str_return_hd << std::endl;
+        system(str_return_hd.c_str());
+
+        std::string str_cd_path = "cd " + path;
+        std::cout << str_cd_path << std::endl;
+        system(str_cd_path.c_str());
+
+        std::string str_git_add = "git add " + new_file;
+        std::cout << str_git_add << std::endl;
+        system(str_git_add.c_str());
+
+        std::string str_git_commit = "git commit -a -m \"update\"";
+        std::cout << str_git_commit << std::endl;
+        system(str_git_commit.c_str());
+
+        std::string str_git_pull = "git pull";
+        std::cout << str_git_pull << std::endl;
+        system(str_git_pull.c_str());
+
+        std::string str_git_push = "git push";
+        std::cout << str_git_push << std::endl;
+        system(str_git_push.c_str());
 }
