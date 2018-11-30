@@ -115,7 +115,7 @@ std::vector<std::string> get_all_symbols_binary() {
         vsymbol.push_back("WLDEUR");
         vsymbol.push_back("WLDGBP");
         vsymbol.push_back("WLDUSD");
-
+/*
         vsymbol.push_back("frxAUDCAD");
         vsymbol.push_back("frxAUDCHF");
         vsymbol.push_back("frxAUDJPY");
@@ -134,6 +134,7 @@ std::vector<std::string> get_all_symbols_binary() {
         vsymbol.push_back("frxGBPCAD");
         vsymbol.push_back("frxGBPCHF");
         vsymbol.push_back("frxGBPJPY");
+        */
         //vsymbol.push_back("frxGBPNOK");
         vsymbol.push_back("frxGBPNZD");
         //vsymbol.push_back("frxGBPPLN");
