@@ -48,6 +48,7 @@ public:
                 UNKNOWN_ERROR = -3,
                 NO_INIT = -4,
                 NO_OPEN_CONNECTION = -5,
+                INVALID_PARAMETER = -6,
         };
 
         // типы контрактов
@@ -106,6 +107,44 @@ private:
         std::atomic<bool> is_array_candles_;
         std::atomic<bool> is_array_candles_error_;
         std::atomic<bool> is_send_array_candles_;
+//------------------------------------------------------------------------------
+        std::string format(const char *fmt, ...)
+        {
+                va_list args;
+                va_start(args, fmt);
+                std::vector<char> v(1024);
+                while (true)
+                {
+                        va_list args2;
+                        va_copy(args2, args);
+                        int res = vsnprintf(v.data(), v.size(), fmt, args2);
+                        if ((res >= 0) && (res < static_cast<int>(v.size())))
+                        {
+                            va_end(args);
+                            va_end(args2);
+                            return std::string(v.data());
+                        }
+                        size_t size;
+                        if (res < 0)
+                            size = v.size() * 2;
+                        else
+                            size = static_cast<size_t>(res) + 1;
+                        v.clear();
+                        v.resize(size);
+                        va_end(args2);
+                }
+        }
+//------------------------------------------------------------------------------
+        int send_json_with_authorize(std::string &message)
+        {
+                if(is_authorize_) {
+                        s_mutex_.lock();
+                        send_queue_.push(message);
+                        s_mutex_.unlock();
+                        return OK;
+                }
+                return NO_AUTHORIZATION;
+        }
 //------------------------------------------------------------------------------
         int send_json_with_authorize(json &j)
         {
@@ -1048,6 +1087,51 @@ public:
         inline bool is_quotations_stream()
         {
                 return is_stream_quotations_;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Отправить ордер на октрытие сделки
+         * Данная функция не проверяет ответ от сервера на запрос
+         * \param symbol имя валютной пары
+         * \param amount размер ставки
+         * \param contract_type тип контракта (см. ContractType, доступно BUY и SELL)
+         * \param duration длительность контракта
+         * \param duration_unit единица измерения длительности контракта (см. DurationType, например MINUTES)
+         * \param currency валюта счета, по умолчанию USD
+         * \return состояние ошибки (OK = 0 в случае успеха, иначе см. ErrorType)
+         */
+        inline int send_order(std::string symbol, double amount, int contract_type, int duration, int duration_unit, std::string currency = "USD")
+        {
+                if(!is_authorize_)
+                        return NO_AUTHORIZATION;
+                // для ускорения работы JSON строку формирует самостоятельно
+                std::string str_symbol = "\"" + symbol + "\"";
+                std::string str_amount = format("\"%f.2\"", amount);
+                std::string str_duration = format("\"%d\"", duration);
+                std::string str_duration_unit;
+                if(duration_unit == MINUTES) str_duration_unit = "\"m\"";
+                else if(duration_unit == SECONDS) str_duration_unit = "\"s\"";
+                else if(duration_unit == HOURS) str_duration_unit = "\"h\"";
+                else if(duration_unit == TICKS) str_duration_unit = "\"t\"";
+                else if(duration_unit == DAYS) str_duration_unit = "\"d\"";
+
+                std::string str_contract_type;
+                if(contract_type == BUY) str_contract_type = "\"CALL\"";
+                else if(contract_type == SELL) str_contract_type = "\"PUT\"";
+                else return INVALID_PARAMETER;
+
+                if(currency == "") {
+                        currency = currency_;
+                }
+                std::string message = "{\"buy\":1,\"parameters\":{\"amount\":" + str_amount +
+                        ",\"basis\":\"stake\",\"contract_type\":" + str_contract_type +
+                        ",\"currency\":\"" + currency + "\",\"duration\":" + str_duration +
+                        ",\"duration_unit\":" + str_duration_unit +
+                        ",\"symbol\":" + str_symbol + "},\"price\":" + str_amount + "}";
+
+                c_mutex_.lock();
+                save_connection_->send(message);
+                c_mutex_.unlock();
+                return OK;
         }
 };
 

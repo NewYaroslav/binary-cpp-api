@@ -4,13 +4,21 @@
 #include <dir.h>
 #include <stdlib.h>
 
-#define BUILD_VER 1.1
+#define BUILD_VER 1.2
 
 using json = nlohmann::json;
 
 std::string format(const char *fmt, ...);
 std::vector<std::string> get_all_symbols_binary();
 void make_commit(std::string disk, std::string path, std::string new_file);
+void write_binary_file(std::string file_name,
+                       std::vector<std::string> &symbols,
+                       int duration,
+                       int duration_uint,
+                       std::string currency,
+                       std::vector<double> &buy_data,
+                       std::vector<double> &sell_data,
+                       unsigned long long timestamp);
 
 int main() {
         std::cout << "build version " << (float)BUILD_VER << std::endl;
@@ -87,14 +95,6 @@ int main() {
                         for(size_t i = 0; i < symbols.size(); ++i) {
                                 std::cout << symbols[i] << " " << buy_data[i] << "/" << sell_data[i] << std::endl;
                         }
-                        // составляем список
-                        json j;
-                        j["time"] = servertime;
-                        for(size_t i = 0; i < symbols.size(); ++i) {
-                                j["data"][i]["symbol"] = symbols[i];
-                                j["data"][i]["buy"] = format("%.3f",buy_data[i]);
-                                j["data"][i]["sell"] = format("%.3",sell_data[i]);
-                        }
                         // сохраняем список
                         mkdir(folder_path.c_str());
                         xtime::DateTime iTime(servertime);
@@ -105,12 +105,17 @@ int main() {
 
                         const std::string file_name = folder_path + "\\" +
                                                       file_chunk_name +
-                                                      ".json";
+                                                      ".hex";
                         // если не выходной, сохраняем файлы
-                        if(!xtime::is_day_off(servertime)) {
-                                std::ofstream o(file_name, std::ios::app);
-                                o << j.dump() << std::endl;
-                                o.close();
+                        if(xtime::is_day_off(servertime)) {
+                                write_binary_file(file_name,
+                                                  symbols,
+                                                  duration,
+                                                  duration_uint,
+                                                  currency,
+                                                  buy_data,
+                                                  sell_data,
+                                                  servertime);
                         }
 
                         if(old_file_name != file_name && is_use_git) {
@@ -180,27 +185,21 @@ void make_commit(std::string disk, std::string path, std::string new_file)
 {
         std::string str_return_hd = "cd " + disk + ":\\";
         std::cout << str_return_hd << std::endl;
-        //system(str_return_hd.c_str());
 
         std::string str_cd_path = "cd " + path;
         std::cout << str_cd_path << std::endl;
-        //system(str_cd_path.c_str());
 
         std::string str_git_add = "git add " + new_file;
         std::cout << str_git_add << std::endl;
-        //system(str_git_add.c_str());
 
         std::string str_git_commit = "git commit -a -m \"update\"";
         std::cout << str_git_commit << std::endl;
-        //system(str_git_commit.c_str());
 
         std::string str_git_pull = "git pull";
         std::cout << str_git_pull << std::endl;
-        //system(str_git_pull.c_str());
 
         std::string str_git_push = "git push";
         std::cout << str_git_push << std::endl;
-        //system(str_git_push.c_str());
 
         std::string msg = str_return_hd + " && " + str_cd_path + " && " + str_git_add + " && " + str_git_commit + " && " + str_git_pull + " & " + str_git_push;
         system(msg.c_str());
@@ -231,4 +230,43 @@ std::string format(const char *fmt, ...)
                 v.resize(size);
                 va_end(args2);
         }
+}
+
+void write_binary_file(std::string file_name,
+                       std::vector<std::string> &symbols,
+                       int duration,
+                       int duration_uint,
+                       std::string currency,
+                       std::vector<double> &buy_data,
+                       std::vector<double> &sell_data,
+                       unsigned long long timestamp)
+{
+        // проверяем, был ли создан файл?
+        std::ifstream fin(file_name);
+        if(!fin) {
+                // сохраняем заголовок файла
+                std::ofstream fout(file_name);
+                json j;
+                j["symbols"] = symbols;
+                j["duration"] = duration;
+                j["duration_uint"] = duration_uint;
+                j["currency"] = currency;
+                const int _sample_len = (2 * sizeof(unsigned short)) * symbols.size() + sizeof (unsigned long long);
+                j["sample_len"] = _sample_len;
+                fout << j.dump() << "\n";
+                fout.close();
+                fin.close();
+        } else {
+                fin.close();
+        }
+        // сохраняем
+        std::ofstream fout(file_name, std::ios_base::binary | std::ios::app);
+        for(int i = 0; i < buy_data.size(); i++) {
+                unsigned short temp_buy = buy_data[i] * 1000;
+                unsigned short temp_sell = sell_data[i] * 1000;
+                fout.write(reinterpret_cast<char *>(&temp_buy),sizeof (temp_buy));
+                fout.write(reinterpret_cast<char *>(&temp_sell),sizeof (temp_sell));
+        }
+        fout.write(reinterpret_cast<char *>(&timestamp),sizeof (timestamp));
+        fout.close();
 }
