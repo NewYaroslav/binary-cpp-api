@@ -6,9 +6,11 @@ using namespace std;
 int main() {
         BinaryApi iBinaryApi;
         std::vector<std::string> symbols;
-        symbols.push_back("frxEURUSD");
-        symbols.push_back("frxEURGBP");
-        symbols.push_back("frxEURJPY");
+        symbols.push_back("R_10");
+        symbols.push_back("R_25");
+        symbols.push_back("R_50");
+        symbols.push_back("R_100");
+        symbols.push_back("WLDAUD");
         std::cout << "init_symbols " << std::endl;
         iBinaryApi.init_symbols(symbols);
         std::cout << "init_stream_quotations " << iBinaryApi.init_stream_quotations(60) << std::endl;

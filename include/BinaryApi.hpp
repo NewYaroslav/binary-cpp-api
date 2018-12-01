@@ -34,6 +34,8 @@
 #include <chrono>
 #include <iostream>
 //------------------------------------------------------------------------------
+#define BINARY_API_USE_TICKS_HISTORY_SUBSCRIBE 1
+//------------------------------------------------------------------------------
 class BinaryApi
 {
 public:
@@ -97,16 +99,24 @@ private:
         std::mutex q_mutex_;
 
         std::atomic<bool> is_stream_quotations_;
+        std::atomic<bool> is_stream_quotations_error_;
         std::atomic<bool> is_stream_proposal_;
         // время сервера
         std::atomic<unsigned long long> last_time_;
         std::atomic<bool> is_last_time_;
-
-        std::mutex array_candles_lock_;
+        // массив баров для истории
+        std::mutex array_candles_mutex_;
         json array_candles_;
         std::atomic<bool> is_array_candles_;
         std::atomic<bool> is_array_candles_error_;
         std::atomic<bool> is_send_array_candles_;
+        // массив тиков для истории
+        std::mutex array_ticks_mutex_;
+        json array_ticks_;
+        std::atomic<bool> is_array_ticks_;
+        std::atomic<bool> is_array_ticks_error_;
+        std::atomic<bool> is_send_array_ticks_;
+
 //------------------------------------------------------------------------------
         std::string format(const char *fmt, ...)
         {
@@ -210,7 +220,7 @@ private:
                                 if((*j_error)["code"] != "AlreadySubscribed") {
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
-                                        if((*j_error)["code"] == "RateLimit") {
+                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
                                                 std::thread([&,message]{
                                                         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                                                         s_mutex_.lock();
@@ -240,12 +250,13 @@ private:
                                 m_mutex_.unlock();
 
                                 q_mutex_.lock();
-                                if(indx >= 0 && indx < (int)close_data_.size()) {
+                                size_t data_size = close_data_.size();
+                                if(indx < (int)data_size) {
                                         if(epoch % 60 == 0) {
                                                 close_data_.at(indx).push_back(quote);
                                                 time_data_.at(indx).push_back(epoch);
                                         } else
-                                        if(close_data_.size() > 0) {
+                                        if(close_data_[indx].size() > 0) {
                                                 if(lastepoch > time_data_.at(indx).back()) {
                                                         close_data_.at(indx).push_back(quote);
                                                         time_data_.at(indx).push_back(lastepoch);
@@ -261,7 +272,72 @@ private:
                                         is_last_time_ = true;
                                 } // if
                                 q_mutex_.unlock();
-                                //}
+                        }
+                        return true;
+                } else {
+                        return false;
+                }
+        }
+//------------------------------------------------------------------------------
+        bool check_ohlc_message(json &j,
+                                json::iterator& j_msg_type,
+                                json::iterator& j_error)
+        {
+                if(*j_msg_type == "ohlc") {
+                        if(j_error != j.end()) {
+                                if((*j_error)["code"] != "AlreadySubscribed") {
+                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                                                // попробуем еще раз
+                                                std::string message = j["echo_req"].dump();
+                                                std::thread([&,message]{
+                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                        s_mutex_.lock();
+                                                        send_queue_.push(message);
+                                                        s_mutex_.unlock();
+                                                }).detach();
+                                        } else {
+                                                is_stream_quotations_error_ = true;
+                                        }
+                                }
+                                return true;
+                        } else {
+                                auto it_ohlc = j.find("ohlc");
+                                unsigned long long open_time = (*it_ohlc)["open_time"];
+                                unsigned long long epoch = (*it_ohlc)["epoch"];
+                                double _close = atof(((*it_ohlc)["close"].get<std::string>()).c_str());
+                                std::string symbol = (*it_ohlc)["symbol"];
+                                // находим номер валютной пары
+                                m_mutex_.lock();
+                                auto it_symbol = map_symbol_.find(symbol);
+                                if(it_symbol == map_symbol_.end()) {
+                                        m_mutex_.unlock();
+                                        return true;
+                                }
+                                const int indx = it_symbol->second;
+                                m_mutex_.unlock();
+
+                                q_mutex_.lock();
+                                unsigned long long last_open_time = time_data_[indx].back();
+                                unsigned long long data_size = close_data_[indx].size();
+                                if(indx < data_size) {
+                                        if(close_data_[indx].size() > 0) {
+                                                if(last_open_time == open_time) {
+                                                        close_data_[indx][data_size - 1] = _close;
+                                                } else
+                                                if(last_open_time < open_time) {
+                                                        close_data_[indx].push_back(_close);
+                                                        time_data_[indx].push_back(open_time);
+                                                }
+                                        } else {
+                                                close_data_[indx].push_back(_close);
+                                                time_data_[indx].push_back(open_time);
+                                        }
+                                }
+                                q_mutex_.unlock();
+
+                                unsigned long long _last_time_ = last_time_;
+                                last_time_ = std::max(epoch, _last_time_);
+                                is_last_time_ = true;
                         }
                         return true;
                 } else {
@@ -275,28 +351,114 @@ private:
         {
                 if(*j_msg_type == "candles") {
                         if(j_error != j.end()) {
-                                if((*j_error)["code"] == "RateLimit") {
-                                        // попробуем еще раз
-                                        std::string message = j["echo_req"].dump();
-                                        std::thread([&,message]{
-                                                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                s_mutex_.lock();
-                                                send_queue_.push(message);
-                                                s_mutex_.unlock();
-                                        }).detach();
-                                } else {
-                                        is_array_candles_ = true;
-                                        is_array_candles_error_ = true;
+                                if((*j_error)["code"] != "AlreadySubscribed") {
+                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                                                // попробуем еще раз
+                                                std::string message = j["echo_req"].dump();
+                                                std::thread([&,message]{
+                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                        s_mutex_.lock();
+                                                        send_queue_.push(message);
+                                                        s_mutex_.unlock();
+                                                }).detach();
+                                        } else {
+                                                if(j["echo_req"]["subscribe"] != 1) {
+                                                        is_array_candles_ = true;
+                                                        is_array_candles_error_ = true;
+                                                } else {
+                                                        is_stream_quotations_error_ = true;
+                                                }
+                                        }
                                 }
+                                return true;
                         } else {
-                                auto it_candles = j.find("candles");
+                                auto j_echo_req = j.find("echo_req");
+                                if((*j_echo_req)["subscribe"] == 1) {
+                                        std::string symbol = (*j_echo_req)["ticks_history"];                                          // символ
+                                        // находим номер валютной пары
+                                        m_mutex_.lock();
+                                        auto it_symbol = map_symbol_.find(symbol);
+                                        if(it_symbol == map_symbol_.end()) {
+                                                m_mutex_.unlock();
+                                                return true;
+                                        }
+                                        const int indx = it_symbol->second;
+                                        m_mutex_.unlock();
 
-                                array_candles_lock_.lock();
-                                if(it_candles != j.end())
-                                        array_candles_ = *it_candles;
-                                array_candles_lock_.unlock();
-                                is_array_candles_ = true;
-                                is_array_candles_error_ = false;
+                                        // инициализируем массив свечей
+                                        auto it_candles = j.find("candles");
+                                        json &j_candles = *it_candles;
+
+                                        const size_t candles_num = j_candles.size();
+                                        q_mutex_.lock();
+                                        close_data_[indx].resize(candles_num);
+                                        time_data_[indx].resize(candles_num);
+                                        for(size_t i = 0; i < candles_num; i++) {
+                                                json &_j = j_candles[i];
+                                                close_data_[indx][i] = atof((_j["close"].get<std::string>()).c_str());
+                                                std::string timestr = _j["epoch"].dump();
+                                                time_data_[indx][i] = atoi(timestr.c_str());
+                                        }
+                                        q_mutex_.unlock();
+                                        return true;
+                                } else {
+                                        auto it_candles = j.find("candles");
+
+                                        array_candles_mutex_.lock();
+                                        if(it_candles != j.end())
+                                                array_candles_ = *it_candles;
+                                        array_candles_mutex_.unlock();
+                                        is_array_candles_ = true;
+                                        is_array_candles_error_ = false;
+                                }
+                        }
+                        return true;
+                } else {
+                        return false;
+                }
+        }
+//------------------------------------------------------------------------------
+        bool check_history_message(json &j,
+                                   json::iterator& j_msg_type,
+                                   json::iterator& j_error)
+        {
+                if(*j_msg_type == "history") {
+                        if(j_error != j.end()) {
+                                if((*j_error)["code"] != "AlreadySubscribed") {
+                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                                                // попробуем еще раз
+                                                std::string message = j["echo_req"].dump();
+                                                std::thread([&,message]{
+                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                                        s_mutex_.lock();
+                                                        send_queue_.push(message);
+                                                        s_mutex_.unlock();
+                                                }).detach();
+                                        } else {
+                                                if(j["echo_req"]["subscribe"] != 1) {
+                                                        is_array_ticks_ = true;
+                                                        is_array_ticks_error_ = true;
+                                                } else {
+                                                        is_stream_quotations_error_ = true;
+                                                }
+                                        }
+                                }
+                                return true;
+                        } else {
+                                auto j_echo_req = j.find("echo_req");
+                                if((*j_echo_req)["subscribe"] == 1) {
+                                        // тиковый поток
+                                        return true;
+                                } else {
+                                        auto it_history = j.find("history");
+
+                                        array_ticks_mutex_.lock();
+                                        if(it_history != j.end())
+                                                array_ticks_ = *it_history;
+                                        array_ticks_mutex_.unlock();
+                                        is_array_ticks_ = true;
+                                        is_array_ticks_error_ = false;
+                                }
                         }
                         return true;
                 } else {
@@ -416,15 +578,19 @@ private:
                         json::iterator it_msg_type = j.find("msg_type");
                         json::iterator it_error = j.find("error");
                         // обрабатываем сообщение
+                        if(check_ohlc_message(j, it_msg_type, it_error))
+                                return;
                         if(check_tick_message(j, it_msg_type, it_error))
                                 return;
                         if(check_proposal_message(j, it_msg_type, it_error))
                                 return;
-                        if(check_authorize_message(j, it_msg_type, it_error))
-                                return;
                         if(check_candles_message(j, it_msg_type, it_error))
                                 return;
+                        if(check_history_message(j, it_msg_type, it_error))
+                                return;
                         if(check_time_message(j, it_msg_type, it_error))
+                                return;
+                        if(check_authorize_message(j, it_msg_type, it_error))
                                 return;
                 }
                 catch(...) {
@@ -446,6 +612,8 @@ public:
                         is_stream_quotations_(false), is_stream_proposal_(false),
                         is_last_time_(false), is_array_candles_(false),
                         is_array_candles_error_(false), is_send_array_candles_(false),
+                        is_stream_quotations_error_(false), is_array_ticks_(false),
+                        is_array_ticks_error_(false), is_send_array_ticks_(false),
                         last_time_(0), balance_(0)
         {
                 client_.on_open =
@@ -662,6 +830,109 @@ public:
                 return send_json_with_authorize(j);
         }
 //------------------------------------------------------------------------------
+        /** \brief Загрузить исторические данные тиков
+         * \param symbol Имя валютной пары
+         * \param count_ticks Количество тиков. Не имеет смысла ставить данный параметр больше 5000
+         * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
+         * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        int download_ticks(std::string symbol,
+                           int count_ticks,
+                           unsigned long long startepoch,
+                           unsigned long long endepoch)
+        {
+                json j;
+                j["ticks_history"] = symbol;
+                if(endepoch == 0) j["end"] = "latest";
+                else j["end"] = endepoch;
+                if(startepoch == 0) {
+                        j["start"] = 1;
+                        j["count"] = count_ticks;
+                } else {
+                        j["start"] = startepoch;
+                }
+                j["style"] = "ticks";
+                array_ticks_mutex_.lock();
+                array_ticks_.clear();
+                array_ticks_mutex_.unlock();
+                is_array_ticks_error_ = false;
+                is_array_ticks_ = false;
+                is_send_array_ticks_ = true;
+                return send_json(j);
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить исторические данные тиков
+         * \param prices Цены тиков
+         * \param times Время тиков
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        int get_ticks(std::vector<double> &prices,
+                      std::vector<unsigned long long> &times)
+        {
+                if(!is_send_array_ticks_)
+                        return NO_COMMAND;
+                is_send_array_ticks_ = false;
+                std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
+                std::chrono::time_point<std::chrono::steady_clock> stop = std::chrono::steady_clock::now();
+                while(true) {
+                        std::this_thread::yield();
+
+                        // получили историю
+                        if(is_array_ticks_) {
+                                break;
+                        }
+
+                        stop = std::chrono::steady_clock::now();
+                        std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                        const float MAX_DELAY = 5.0f;
+                        // слишком долго ждем историю
+                        if(diff.count() > MAX_DELAY) {
+                                return UNKNOWN_ERROR;
+                        }
+                }
+                // если была ошибка получения котировок
+                if(is_array_ticks_error_) {
+                        return UNKNOWN_ERROR;
+                } else {
+                        // преобразуем данные
+                        array_ticks_mutex_.lock();
+                        json j_prices = array_ticks_["prices"];
+                        json j_times = array_ticks_["times"];
+                        prices.resize(j_prices.size());
+                        times.resize(j_times.size());
+                        for(size_t i = 0; i < prices.size(); i++) {
+                                prices[i] = atof((j_prices[i].get<std::string>()).c_str());
+                                std::string timestr = j_times[i].dump();
+                                times[i] = atoi(timestr.c_str());
+                        }
+                        array_ticks_mutex_.unlock();
+                        return OK;
+                }
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить исторические данные тиков
+         * \param symbol Имя валютной пары
+         * \param count_ticks Количество свечей. Не имеет смысла ставить данный параметр больше 5000
+         * \param prices Цены тиков
+         * \param times Время тиков
+         * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
+         * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        int get_ticks(std::string symbol,
+                        int count_ticks,
+                        std::vector<double> &prices,
+                        std::vector<unsigned long long> &times,
+                        unsigned long long startepoch,
+                        unsigned long long endepoch)
+        {
+                int err_data = download_ticks(symbol, count_ticks, startepoch, endepoch);
+                if(err_data != OK)
+                        return err_data;
+                return get_ticks(prices, times);
+        }
+//------------------------------------------------------------------------------
         /** \brief Загрузить исторические данные минутных свечей
          * \param symbol Имя валютной пары
          * \param candles_size Количество свечей. Не имеет смысла ставить данный параметр больше 5000
@@ -686,9 +957,9 @@ public:
                 }
                 j["style"] = "candles";
                 j["granularity"] = 60;
-                array_candles_lock_.lock();
+                array_candles_mutex_.lock();
                 array_candles_.clear();
-                array_candles_lock_.unlock();
+                array_candles_mutex_.unlock();
                 is_array_candles_error_ = false;
                 is_array_candles_ = false;
                 is_send_array_candles_ = true;
@@ -729,7 +1000,7 @@ public:
                         return UNKNOWN_ERROR;
                 } else {
                         // преобразуем данные
-                        array_candles_lock_.lock();
+                        array_candles_mutex_.lock();
                         close.resize(array_candles_.size());
                         times.resize(array_candles_.size());
                         for(size_t i = 0; i < array_candles_.size(); i++) {
@@ -738,7 +1009,7 @@ public:
                                 std::string timestr = j["epoch"].dump();
                                 times[i] = atoi(timestr.c_str());
                         }
-                        array_candles_lock_.unlock();
+                        array_candles_mutex_.unlock();
                         return OK;
                 }
         }
@@ -802,6 +1073,8 @@ public:
         {
                 if(symbols_.size() == 0)
                         return NO_INIT;
+                is_stream_quotations_error_ = false;
+#               if BINARY_API_USE_TICKS_HISTORY_SUBSCRIBE == 0
                 for(size_t i = 0; i < symbols_.size(); ++i) {
                         q_mutex_.lock();
                         int err_data = get_candles(symbols_[i], init_size, close_data_.at(i), time_data_.at(i), 0, 0);
@@ -821,6 +1094,29 @@ public:
                         is_stream_quotations_ = true;
                 }
                 return err_data;
+#               else
+                int err_data;
+                for(size_t i = 0; i < symbols_.size(); ++i) {
+                        json j;
+                        j["ticks_history"] = symbols_[i];
+                        j["subscribe"] = 1;
+                        j["end"] = "latest";
+                        j["style"] = "candles";
+                        j["granularity"] = 60;
+                        j["adjust_start_time"] = 1;
+                        j["count"] = init_size;
+                        err_data = send_json(j);
+                        if(err_data != OK) {
+                                break;
+                        }
+                }
+                if(err_data == OK) {
+                        is_stream_quotations_ = true;
+                } else {
+                        stop_stream_quotations();
+                }
+                return err_data;
+#               endif
         }
 //------------------------------------------------------------------------------
         /** \brief Остановить поток котировок
@@ -831,6 +1127,7 @@ public:
                 json j;
                 j["forget_all"] = "ticks";
                 is_stream_quotations_ = false;
+                is_stream_quotations_error_ = false;
                 return send_json(j);
         }
 //------------------------------------------------------------------------------
@@ -851,6 +1148,8 @@ public:
                 close_data = std::vector<std::vector<double>>(close_data_.cbegin(), close_data_.cend());
                 time_data = std::vector<std::vector<unsigned long long>>(time_data_.cbegin(), time_data_.cend());
                 q_mutex_.unlock();
+                if(is_stream_quotations_error_)
+                        return UNKNOWN_ERROR;
                 return OK;
         }
 //------------------------------------------------------------------------------
