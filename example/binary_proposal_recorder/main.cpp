@@ -46,6 +46,7 @@ int main() {
 
         std::string folder_path = disk_name + ":\\" + path + "\\" + folder_name;
         std::string file_name_pp = folder_path + "\\parameters.json";
+        mkdir(folder_path.c_str());
         std::ofstream fp(file_name_pp);
         fp << std::setw(4) << j_pp << std::endl;
         fp.close();
