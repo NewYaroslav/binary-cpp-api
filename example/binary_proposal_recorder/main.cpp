@@ -4,12 +4,16 @@
 #include <dir.h>
 #include <stdlib.h>
 
+#define BUILD_VER 1.1
+
 using json = nlohmann::json;
 
+std::string format(const char *fmt, ...);
 std::vector<std::string> get_all_symbols_binary();
 void make_commit(std::string disk, std::string path, std::string new_file);
 
 int main() {
+        std::cout << "build version " << (float)BUILD_VER << std::endl;
         BinaryApi iBinaryApi;
         BinaryApi iBinaryApiForTime;
         json j_settings;
@@ -17,7 +21,6 @@ int main() {
         i >> j_settings;
         i.close();
         std::cout << std::setw(4) << j_settings << std::endl;
-
         std::vector<std::string> symbols = get_all_symbols_binary();
         // инициализируем список валютных пар
         std::cout << "init_symbols..." << std::endl;
@@ -32,6 +35,22 @@ int main() {
         const std::string path = j_settings["path"];
         int is_use_git = j_settings["git"];
         std::string old_file_name = "";
+
+        // сохраним список валютных пар и параметры в отдельный файл
+        json j_pp;
+        j_pp["amount"] = amount;
+        j_pp["duration"] = duration;
+        j_pp["duration_uint"] = duration_uint;
+        j_pp["currency"] = currency;
+        j_pp["symbols"] = symbols;
+
+        std::string folder_path = disk_name + ":\\" + path + "\\" + folder_name;
+        std::string file_name_pp = folder_path + "\\parameters.json";
+        std::ofstream fp(file_name_pp);
+        fp << std::setw(4) << j_pp << std::endl;
+        fp.close();
+        //
+
         std::cout << "..." << std::endl;
         unsigned long long servertime_last = 0;
         while(true) {
@@ -69,27 +88,21 @@ int main() {
                         }
                         // составляем список
                         json j;
-                        //j["data_type"] = "proposal";
-                        //j["duration"] = duration;
-                        //j["duration_unit"] = duration_uint;
-                        //j["amount"] = amount;
-                        //j["currency"] = currency;
                         j["time"] = servertime;
                         for(size_t i = 0; i < symbols.size(); ++i) {
                                 j["data"][i]["symbol"] = symbols[i];
-                                j["data"][i]["buy"] = buy_data[i];
-                                j["data"][i]["sell"] = sell_data[i];
+                                j["data"][i]["buy"] = format("%.3f",buy_data[i]);
+                                j["data"][i]["sell"] = format("%.3",sell_data[i]);
                         }
                         // сохраняем список
-                        std::string _folder_name = disk_name + ":\\" + path + "\\" + folder_name;
-                        mkdir(_folder_name.c_str());
+                        mkdir(folder_path.c_str());
                         xtime::DateTime iTime(servertime);
                         std::string file_chunk_name = "proposal_" +
                                                       std::to_string(iTime.day) + "_" +
                                                       std::to_string(iTime.month) + "_" +
                                                       std::to_string(iTime.year);
 
-                        const std::string file_name = _folder_name + "\\" +
+                        const std::string file_name = folder_path + "\\" +
                                                       file_chunk_name +
                                                       ".json";
                         // если не выходной, сохраняем файлы
@@ -190,4 +203,31 @@ void make_commit(std::string disk, std::string path, std::string new_file)
 
         std::string msg = str_return_hd + " && " + str_cd_path + " && " + str_git_add + " && " + str_git_commit + " && " + str_git_pull + " & " + str_git_push;
         system(msg.c_str());
+}
+
+std::string format(const char *fmt, ...)
+{
+        va_list args;
+        va_start(args, fmt);
+        std::vector<char> v(1024);
+        while (true)
+        {
+                va_list args2;
+                va_copy(args2, args);
+                int res = vsnprintf(v.data(), v.size(), fmt, args2);
+                if ((res >= 0) && (res < static_cast<int>(v.size())))
+                {
+                    va_end(args);
+                    va_end(args2);
+                    return std::string(v.data());
+                }
+                size_t size;
+                if (res < 0)
+                    size = v.size() * 2;
+                else
+                    size = static_cast<size_t>(res) + 1;
+                v.clear();
+                v.resize(size);
+                va_end(args2);
+        }
 }
