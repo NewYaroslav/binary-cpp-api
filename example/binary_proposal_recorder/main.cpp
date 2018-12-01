@@ -107,7 +107,7 @@ int main() {
                                                       file_chunk_name +
                                                       ".hex";
                         // если не выходной, сохраняем файлы
-                        if(xtime::is_day_off(servertime)) {
+                        if(!xtime::is_day_off(servertime)) {
                                 write_binary_file(file_name,
                                                   symbols,
                                                   duration,
