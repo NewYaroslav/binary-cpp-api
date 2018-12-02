@@ -36,7 +36,7 @@
 //------------------------------------------------------------------------------
 #define BINARY_API_USE_TICKS_HISTORY_SUBSCRIBE 1
 //------------------------------------------------------------------------------
-class BinaryApi
+class BinaryAPI
 {
 public:
         using json = nlohmann::json;
@@ -73,30 +73,30 @@ private:
         std::string token_ = "";
         std::mutex token_mutex_;
         std::atomic<bool> is_error_token_;
-        std::mutex c_mutex_;
+        std::mutex connection_mutex_;
 
         std::queue<std::string> send_queue_; // Очередь сообщений
-        std::mutex s_mutex_;
+        std::mutex send_queue_mutex_;
 
         // параметры счета
         std::atomic<double> balance_; // Баланс счета
         std::string currency_ = ""; // Валюта счета
         std::atomic<bool> is_authorize_;
-        std::mutex a_mutex_;
+        std::mutex authorize_mutex_;
 
 
         // поток выплат и котировок
         std::vector<std::string> symbols_;
         std::unordered_map<std::string, int> map_symbol_;
-        std::mutex m_mutex_;
+        std::mutex map_symbol_mutex_;
 
         std::vector<double> proposal_buy_;
         std::vector<double> proposal_sell_;
-        std::mutex p_mutex_;
+        std::mutex proposal_mutex_;
 
         std::vector<std::vector<double>> close_data_;
         std::vector<std::vector<unsigned long long>> time_data_;
-        std::mutex q_mutex_;
+        std::mutex quotations_mutex_;
 
         std::atomic<bool> is_stream_quotations_;
         std::atomic<bool> is_stream_quotations_error_;
@@ -148,9 +148,9 @@ private:
         int send_json_with_authorize(std::string &message)
         {
                 if(is_authorize_) {
-                        s_mutex_.lock();
+                        send_queue_mutex_.lock();
                         send_queue_.push(message);
-                        s_mutex_.unlock();
+                        send_queue_mutex_.unlock();
                         return OK;
                 }
                 return NO_AUTHORIZATION;
@@ -160,9 +160,9 @@ private:
         {
                 if(is_authorize_) {
                         std::string message = j.dump();
-                        s_mutex_.lock();
+                        send_queue_mutex_.lock();
                         send_queue_.push(message);
-                        s_mutex_.unlock();
+                        send_queue_mutex_.unlock();
                         return OK;
                 }
                 return NO_AUTHORIZATION;
@@ -172,34 +172,34 @@ private:
         {
                 if(is_open_connection_) {
                         std::string message = j.dump();
-                        s_mutex_.lock();
+                        send_queue_mutex_.lock();
                         send_queue_.push(message);
-                        s_mutex_.unlock();
+                        send_queue_mutex_.unlock();
                         return OK;
                 }
                 return NO_OPEN_CONNECTION;
         }
 //------------------------------------------------------------------------------
         bool check_time_message(json &j,
-                                json::iterator& j_msg_type,
-                                json::iterator& j_error)
+                                json::iterator &it_msg_type,
+                                json::iterator &it_error)
         {
-                if(*j_msg_type == "time") {
-                        if(j_error != j.end()) {
+                if(*it_msg_type == "time") {
+                        if(it_error != j.end()) {
                                 // попробуем еще раз
                                 std::string message = j["echo_req"].dump();
-                                if((*j_error)["code"] == "RateLimit") {
+                                if((*it_error)["code"] == "RateLimit") {
                                         // отправим сообщение повторно с задержкой
                                         std::thread([&,message]{
                                                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                s_mutex_.lock();
+                                                send_queue_mutex_.lock();
                                                 send_queue_.push(message);
-                                                s_mutex_.unlock();
+                                                send_queue_mutex_.unlock();
                                         }).detach();
                                 } else {
-                                        s_mutex_.lock();
+                                        send_queue_mutex_.lock();
                                         send_queue_.push(message);
-                                        s_mutex_.unlock();
+                                        send_queue_mutex_.unlock();
                                 }
                         } else {
                                 last_time_ = j["time"];
@@ -212,25 +212,25 @@ private:
         }
 //------------------------------------------------------------------------------
         bool check_tick_message(json &j,
-                                json::iterator& j_msg_type,
-                                json::iterator& j_error)
+                                json::iterator &it_msg_type,
+                                json::iterator &it_error)
         {
-                if(*j_msg_type == "tick") {
-                        if(j_error != j.end()) {
-                                if((*j_error)["code"] != "AlreadySubscribed") {
+                if(*it_msg_type == "tick") {
+                        if(it_error != j.end()) {
+                                if((*it_error)["code"] != "AlreadySubscribed") {
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
-                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                                        if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 std::thread([&,message]{
                                                         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        s_mutex_.lock();
+                                                        send_queue_mutex_.lock();
                                                         send_queue_.push(message);
-                                                        s_mutex_.unlock();
+                                                        send_queue_mutex_.unlock();
                                                 }).detach();
                                         } else {
-                                                s_mutex_.lock();
+                                                send_queue_mutex_.lock();
                                                 send_queue_.push(message);
-                                                s_mutex_.unlock();
+                                                send_queue_mutex_.unlock();
                                         }
                                 }
                         } else {
@@ -240,16 +240,16 @@ private:
                                 std::string symbol = (*it_tick)["symbol"];                                          // символ
                                 unsigned long long lastepoch = (epoch/60)*60;                                               // время послденей закрытой свечи
 
-                                m_mutex_.lock();
+                                map_symbol_mutex_.lock();
                                 auto it_symbol = map_symbol_.find(symbol);
                                 if(it_symbol == map_symbol_.end()) {
-                                        m_mutex_.unlock();
+                                        map_symbol_mutex_.unlock();
                                         return true;
                                 }
                                 volatile int indx = it_symbol->second;
-                                m_mutex_.unlock();
+                                map_symbol_mutex_.unlock();
 
-                                q_mutex_.lock();
+                                quotations_mutex_.lock();
                                 size_t data_size = close_data_.size();
                                 if(indx < (int)data_size) {
                                         if(epoch % 60 == 0) {
@@ -271,7 +271,7 @@ private:
                                         last_time_ = std::max(epoch, _last_time_);
                                         is_last_time_ = true;
                                 } // if
-                                q_mutex_.unlock();
+                                quotations_mutex_.unlock();
                         }
                         return true;
                 } else {
@@ -280,20 +280,20 @@ private:
         }
 //------------------------------------------------------------------------------
         bool check_ohlc_message(json &j,
-                                json::iterator& j_msg_type,
-                                json::iterator& j_error)
+                                json::iterator &it_msg_type,
+                                json::iterator &it_error)
         {
-                if(*j_msg_type == "ohlc") {
-                        if(j_error != j.end()) {
-                                if((*j_error)["code"] != "AlreadySubscribed") {
-                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                if(*it_msg_type == "ohlc") {
+                        if(it_error != j.end()) {
+                                if((*it_error)["code"] != "AlreadySubscribed") {
+                                        if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 // попробуем еще раз
                                                 std::string message = j["echo_req"].dump();
                                                 std::thread([&,message]{
                                                         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        s_mutex_.lock();
+                                                        send_queue_mutex_.lock();
                                                         send_queue_.push(message);
-                                                        s_mutex_.unlock();
+                                                        send_queue_mutex_.unlock();
                                                 }).detach();
                                         } else {
                                                 is_stream_quotations_error_ = true;
@@ -307,16 +307,16 @@ private:
                                 double _close = atof(((*it_ohlc)["close"].get<std::string>()).c_str());
                                 std::string symbol = (*it_ohlc)["symbol"];
                                 // находим номер валютной пары
-                                m_mutex_.lock();
+                                map_symbol_mutex_.lock();
                                 auto it_symbol = map_symbol_.find(symbol);
                                 if(it_symbol == map_symbol_.end()) {
-                                        m_mutex_.unlock();
+                                        map_symbol_mutex_.unlock();
                                         return true;
                                 }
                                 const int indx = it_symbol->second;
-                                m_mutex_.unlock();
+                                map_symbol_mutex_.unlock();
 
-                                q_mutex_.lock();
+                                quotations_mutex_.lock();
                                 unsigned long long last_open_time = time_data_[indx].back();
                                 unsigned long long data_size = close_data_[indx].size();
                                 if(indx < data_size) {
@@ -333,7 +333,7 @@ private:
                                                 time_data_[indx].push_back(open_time);
                                         }
                                 }
-                                q_mutex_.unlock();
+                                quotations_mutex_.unlock();
 
                                 unsigned long long _last_time_ = last_time_;
                                 last_time_ = std::max(epoch, _last_time_);
@@ -346,20 +346,20 @@ private:
         }
 //------------------------------------------------------------------------------
         bool check_candles_message(json &j,
-                                   json::iterator& j_msg_type,
-                                   json::iterator& j_error)
+                                   json::iterator &it_msg_type,
+                                   json::iterator &it_error)
         {
-                if(*j_msg_type == "candles") {
-                        if(j_error != j.end()) {
-                                if((*j_error)["code"] != "AlreadySubscribed") {
-                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                if(*it_msg_type == "candles") {
+                        if(it_error != j.end()) {
+                                if((*it_error)["code"] != "AlreadySubscribed") {
+                                        if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 // попробуем еще раз
                                                 std::string message = j["echo_req"].dump();
                                                 std::thread([&,message]{
                                                         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        s_mutex_.lock();
+                                                        send_queue_mutex_.lock();
                                                         send_queue_.push(message);
-                                                        s_mutex_.unlock();
+                                                        send_queue_mutex_.unlock();
                                                 }).detach();
                                         } else {
                                                 if(j["echo_req"]["subscribe"] != 1) {
@@ -376,21 +376,21 @@ private:
                                 if((*j_echo_req)["subscribe"] == 1) {
                                         std::string symbol = (*j_echo_req)["ticks_history"];                                          // символ
                                         // находим номер валютной пары
-                                        m_mutex_.lock();
+                                        map_symbol_mutex_.lock();
                                         auto it_symbol = map_symbol_.find(symbol);
                                         if(it_symbol == map_symbol_.end()) {
-                                                m_mutex_.unlock();
+                                                map_symbol_mutex_.unlock();
                                                 return true;
                                         }
                                         const int indx = it_symbol->second;
-                                        m_mutex_.unlock();
+                                        map_symbol_mutex_.unlock();
 
                                         // инициализируем массив свечей
                                         auto it_candles = j.find("candles");
                                         json &j_candles = *it_candles;
 
                                         const size_t candles_num = j_candles.size();
-                                        q_mutex_.lock();
+                                        quotations_mutex_.lock();
                                         close_data_[indx].resize(candles_num);
                                         time_data_[indx].resize(candles_num);
                                         for(size_t i = 0; i < candles_num; i++) {
@@ -399,7 +399,7 @@ private:
                                                 std::string timestr = _j["epoch"].dump();
                                                 time_data_[indx][i] = atoi(timestr.c_str());
                                         }
-                                        q_mutex_.unlock();
+                                        quotations_mutex_.unlock();
                                         return true;
                                 } else {
                                         auto it_candles = j.find("candles");
@@ -419,20 +419,20 @@ private:
         }
 //------------------------------------------------------------------------------
         bool check_history_message(json &j,
-                                   json::iterator& j_msg_type,
-                                   json::iterator& j_error)
+                                   json::iterator &it_msg_type,
+                                   json::iterator &it_error)
         {
-                if(*j_msg_type == "history") {
-                        if(j_error != j.end()) {
-                                if((*j_error)["code"] != "AlreadySubscribed") {
-                                        if((*j_error)["code"] == "RateLimit" || (*j_error)["code"] ==  "MarketIsClosed") {
+                if(*it_msg_type == "history") {
+                        if(it_error != j.end()) {
+                                if((*it_error)["code"] != "AlreadySubscribed") {
+                                        if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 // попробуем еще раз
                                                 std::string message = j["echo_req"].dump();
                                                 std::thread([&,message]{
                                                         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        s_mutex_.lock();
+                                                        send_queue_mutex_.lock();
                                                         send_queue_.push(message);
-                                                        s_mutex_.unlock();
+                                                        send_queue_mutex_.unlock();
                                                 }).detach();
                                         } else {
                                                 if(j["echo_req"]["subscribe"] != 1) {
@@ -467,36 +467,36 @@ private:
         }
 //------------------------------------------------------------------------------
         bool check_authorize_message(json &j,
-                                     json::iterator& j_msg_type,
-                                     json::iterator& j_error)
+                                     json::iterator &it_msg_type,
+                                     json::iterator &it_error)
         {
                 // получили сообщение авторизации
-                if(*j_msg_type == "authorize") {
-                        if(j_error != j.end()) {
+                if(*it_msg_type == "authorize") {
+                        if(it_error != j.end()) {
                                 // попробуем еще раз залогиниться
                                 std::string message = j["echo_req"].dump();
-                                if((*j_error)["code"] == "RateLimit") {
+                                if((*it_error)["code"] == "RateLimit") {
                                         std::thread([&,message]{
                                                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                s_mutex_.lock();
+                                                send_queue_mutex_.lock();
                                                 send_queue_.push(message);
-                                                s_mutex_.unlock();
+                                                send_queue_mutex_.unlock();
                                         }).detach();
                                 } else {
-                                        if((*j_error)["code"] == "InvalidToken") {
+                                        if((*it_error)["code"] == "InvalidToken") {
                                                 is_error_token_ = true;
                                                 return true;
                                         }
-                                        s_mutex_.lock();
+                                        send_queue_mutex_.lock();
                                         send_queue_.push(message);
-                                        s_mutex_.unlock();
+                                        send_queue_mutex_.unlock();
                                 }
                                 is_authorize_ = false;
                         } else {
                                 balance_ = atof((j["authorize"]["balance"].get<std::string>()).c_str());
-                                a_mutex_.lock();
+                                authorize_mutex_.lock();
                                 currency_ = j["authorize"]["currency"];
-                                a_mutex_.unlock();
+                                authorize_mutex_.unlock();
                                 is_authorize_ = true;
                                 //a_mutex_.unlock();
                         }
@@ -507,60 +507,60 @@ private:
         }
 //------------------------------------------------------------------------------
         bool check_proposal_message(json &j,
-                                    json::iterator& j_msg_type,
-                                    json::iterator& j_error)
+                                    json::iterator &it_msg_type,
+                                    json::iterator &it_error)
         {
                 auto it_echo_req = j.find("echo_req");
-                if(*j_msg_type == "proposal" &&
+                if(*it_msg_type == "proposal" &&
                         (*it_echo_req)["subscribe"] == 1) {
                         std::string _symbol = (*it_echo_req)["symbol"];
-                        m_mutex_.lock();
+                        map_symbol_mutex_.lock();
                         auto it_symbol = map_symbol_.find(_symbol);
                         if(it_symbol != map_symbol_.end()) {
                                 volatile int indx = it_symbol->second;
-                                m_mutex_.unlock();
+                                map_symbol_mutex_.unlock();
                                 double temp = 0.0;
-                                if(j_error == j.end()) {
+                                if(it_error == j.end()) {
                                         auto it_proposal = j.find("proposal");
                                         double ask_price = atof(((*it_proposal)["ask_price"].get<std::string>()).c_str());
                                         double payout = atof(((*it_proposal)["payout"].get<std::string>()).c_str());
                                         temp = ask_price != 0 ? (payout/ask_price) - 1 : 0.0;
                                 } else {
-                                        if((*j_error)["code"] == "AlreadySubscribed") {
+                                        if((*it_error)["code"] == "AlreadySubscribed") {
                                                 return true;
                                         }
                                         // отправим сообщение о подписки на выплаты
                                         std::string message = j["echo_req"].dump();
-                                        if((*j_error)["code"] == "RateLimit" ||
-                                          (*j_error)["code"] == "ContractBuyValidationError") {
+                                        if((*it_error)["code"] == "RateLimit" ||
+                                          (*it_error)["code"] == "ContractBuyValidationError") {
                                                 // отправляем сообщение с задержкой
                                                 std::thread([&,message]{
                                                         std::this_thread::sleep_for(std::chrono::milliseconds(2500));
-                                                        s_mutex_.lock();
+                                                        send_queue_mutex_.lock();
                                                         send_queue_.push(message);
-                                                        s_mutex_.unlock();
+                                                        send_queue_mutex_.unlock();
                                                 }).detach();
                                         } else {
                                                 // отправляем сообщение мгновенно
-                                                s_mutex_.lock();
+                                                send_queue_mutex_.lock();
                                                 send_queue_.push(message);
-                                                s_mutex_.unlock();
+                                                send_queue_mutex_.unlock();
                                         }
                                 }
                                 //std::cout << "6" << std::endl;
                                 auto it_contract_type = (*it_echo_req).find("contract_type");
                                 if(*it_contract_type == "CALL") {
-                                        p_mutex_.lock();
+                                        proposal_mutex_.lock();
                                         proposal_buy_.at(indx) = temp;
-                                        p_mutex_.unlock();
+                                        proposal_mutex_.unlock();
                                 } else
                                 if(*it_contract_type == "PUT") {
-                                        p_mutex_.lock();
+                                        proposal_mutex_.lock();
                                         proposal_sell_.at(indx) = temp;
-                                        p_mutex_.unlock();
+                                        proposal_mutex_.unlock();
                                 } // if
                         } else {
-                                m_mutex_.unlock();
+                                map_symbol_mutex_.unlock();
                         }
                         return true;
                 } else {
@@ -568,7 +568,7 @@ private:
                 }
         }
 //------------------------------------------------------------------------------
-        void parse_json(std::string& str)
+        void parse_json(std::string &str)
         {
                 try {
                         json j = json::parse(str);
@@ -605,7 +605,7 @@ public:
          * \param token Токен. Можно указать пустую строку, но тогда не все функции будут доступны
          * \param app_id ID API вашего приложения
          */
-        BinaryApi(std::string token = "", std::string app_id = "1089")
+        BinaryAPI(std::string token = "", std::string app_id = "1089")
                 : client_("ws.binaryws.com/websockets/v3?l=en&app_id=" +
                         app_id, false) , token_(token), is_open_connection_(false),
                         is_error_token_(false), is_authorize_(false),
@@ -625,7 +625,7 @@ public:
                          * чтобы можно было отправлять сообщения
                          */
                         json j;
-                        std::lock(c_mutex_, token_mutex_);
+                        std::lock(connection_mutex_, token_mutex_);
                         save_connection_ = connection;
                         if(token_ != "") {
                                 j["authorize"] = token_;
@@ -638,7 +638,7 @@ public:
                          //       message << "\"" << std::endl;
 
                         connection->send(message);
-                        c_mutex_.unlock();
+                        connection_mutex_.unlock();
                         is_open_connection_ = true;
                 };
 
@@ -692,16 +692,16 @@ public:
                         while(true) {
                                 if(is_open_connection_) {
                                         // отправим сообщение, если есть что отправлять
-                                        s_mutex_.lock();
+                                        send_queue_mutex_.lock();
                                         if(send_queue_.size() > 0) {
                                                 std::string message = send_queue_.front();
                                                 send_queue_.pop();
-                                                s_mutex_.unlock();
+                                                send_queue_mutex_.unlock();
                                                 //std::cout << "BinaryApi: send " <<
                                                 //        message << std::endl;
-                                                c_mutex_.lock();
+                                                connection_mutex_.lock();
                                                 save_connection_->send(message);
-                                                c_mutex_.unlock();
+                                                connection_mutex_.unlock();
                                                 /* проверим ограничение запросов в минуту
                                                  */
                                                 num_requestes++; // увеличим число запросов в минуту
@@ -736,7 +736,7 @@ public:
                                                  */
                                                 start = std::chrono::steady_clock::now();
                                         } else {
-                                                s_mutex_.unlock();
+                                                send_queue_mutex_.unlock();
                                                 stop = std::chrono::steady_clock::now();
                                                 std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
                                                 const float PING_DELAY = 20.0f;
@@ -744,9 +744,9 @@ public:
                                                         json j;
                                                         j["ping"] = 1;
                                                         std::string message = j.dump();
-                                                        s_mutex_.lock();
+                                                        send_queue_mutex_.lock();
                                                         send_queue_.push(message);
-                                                        s_mutex_.unlock();
+                                                        send_queue_mutex_.unlock();
                                                         start = std::chrono::steady_clock::now();
                                                 }
                                         }
@@ -800,9 +800,9 @@ public:
          inline int get_currency(std::string &currency)
          {
                 if(is_authorize_) {
-                        a_mutex_.lock();
+                        authorize_mutex_.lock();
                         currency = currency_;
-                        a_mutex_.unlock();
+                        authorize_mutex_.unlock();
                         return OK;
                 }
                 return NO_AUTHORIZATION;
@@ -1043,26 +1043,26 @@ public:
         {
                 symbols_ = symbols;
 
-                p_mutex_.lock();
+                proposal_mutex_.lock();
                 proposal_buy_.clear();
                 proposal_buy_.resize(symbols.size());
                 proposal_sell_.clear();
                 proposal_sell_.resize(symbols.size());
-                p_mutex_.unlock();
+                proposal_mutex_.unlock();
 
-                q_mutex_.lock();
+                quotations_mutex_.lock();
                 close_data_.clear();
                 time_data_.clear();
                 close_data_.resize(symbols.size());
                 time_data_.resize(symbols.size());
-                q_mutex_.unlock();
+                quotations_mutex_.unlock();
 
-                m_mutex_.lock();
+                map_symbol_mutex_.lock();
                 map_symbol_.clear();
                 for(size_t i = 0; i < symbols_.size(); ++i) {
                         map_symbol_[symbols_[i]] = i;
                 }
-                m_mutex_.unlock();
+                map_symbol_mutex_.unlock();
         }
 //------------------------------------------------------------------------------
         /** \brief Инициализировать поток котировок
@@ -1076,9 +1076,9 @@ public:
                 is_stream_quotations_error_ = false;
 #               if BINARY_API_USE_TICKS_HISTORY_SUBSCRIBE == 0
                 for(size_t i = 0; i < symbols_.size(); ++i) {
-                        q_mutex_.lock();
+                        quotations_mutex_.lock();
                         int err_data = get_candles(symbols_[i], init_size, close_data_.at(i), time_data_.at(i), 0, 0);
-                        q_mutex_.unlock();
+                        quotations_mutex_.unlock();
                         if(err_data != OK)
                                 return err_data;
                 }
@@ -1144,10 +1144,10 @@ public:
                         return NO_INIT;
                 }
 
-                q_mutex_.lock();
+                quotations_mutex_.lock();
                 close_data = std::vector<std::vector<double>>(close_data_.cbegin(), close_data_.cend());
                 time_data = std::vector<std::vector<unsigned long long>>(time_data_.cbegin(), time_data_.cend());
-                q_mutex_.unlock();
+                quotations_mutex_.unlock();
                 if(is_stream_quotations_error_)
                         return UNKNOWN_ERROR;
                 return OK;
@@ -1352,10 +1352,10 @@ public:
                 if(symbols_.size() == 0 || !is_stream_proposal_) {
                         return NO_INIT;
                 }
-                p_mutex_.lock();
+                proposal_mutex_.lock();
                 buy_data = std::vector<double>(proposal_buy_.cbegin(), proposal_buy_.cend());
                 sell_data = std::vector<double>(proposal_sell_.cbegin(), proposal_sell_.cend());
-                p_mutex_.unlock();
+                proposal_mutex_.unlock();
                 return OK;
         }
 //------------------------------------------------------------------------------
@@ -1427,9 +1427,9 @@ public:
                         ",\"duration_unit\":" + str_duration_unit +
                         ",\"symbol\":" + str_symbol + "},\"price\":" + str_amount + "}";
 
-                c_mutex_.lock();
+                connection_mutex_.lock();
                 save_connection_->send(message);
-                c_mutex_.unlock();
+                connection_mutex_.unlock();
                 return OK;
         }
 };

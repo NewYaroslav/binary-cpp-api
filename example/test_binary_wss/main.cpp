@@ -4,7 +4,7 @@
 using namespace std;
 
 int main() {
-        BinaryApi iBinaryApi;
+        BinaryAPI iBinaryApi;
         std::vector<std::string> symbols;
         symbols.push_back("R_10");
         symbols.push_back("R_25");

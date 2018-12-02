@@ -22,8 +22,8 @@ void write_binary_file(std::string file_name,
 
 int main() {
         std::cout << "build version " << (float)BUILD_VER << std::endl;
-        BinaryApi iBinaryApi;
-        BinaryApi iBinaryApiForTime;
+        BinaryAPI iBinaryApi;
+        BinaryAPI iBinaryApiForTime;
         json j_settings;
         std::ifstream i("settings.json");
         i >> j_settings;

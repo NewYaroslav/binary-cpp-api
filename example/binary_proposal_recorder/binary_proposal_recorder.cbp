@@ -60,7 +60,7 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="../../include/BinaryApi.hpp" />
+		<Unit filename="../../include/BinaryAPI.hpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.cpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.hpp" />
 		<Unit filename="main.cpp" />

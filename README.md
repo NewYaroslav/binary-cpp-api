@@ -10,14 +10,14 @@
 
 ### Как пользоваться?
 
-Чтобы начать использовать BinaryApi в своей программе, необходимо после подключения всех зависимостей в проект просто добавить заголовочный файл *BinaryAPI.hpp*.
+Чтобы начать использовать BinaryAPI в своей программе, необходимо после подключения всех зависимостей в проект просто добавить заголовочный файл *BinaryAPI.hpp*.
 
 Пример программы, которая выводит на экран цены закрытия (последние три минутные свечи) с трех валютных пар (EURUSD, EURGBP, EURJPY), а также время сервера:
 ```C++
 #include "BinaryAPI.hpp"
 
 int main() {
-        BinaryApi iBinaryApi; // класс для взаимодействия с BinaryApi
+        BinaryAPI iBinaryApi; // класс для взаимодействия с BinaryApi
         
         std::vector<std::string> symbols; // массив валютных пар
         symbols.push_back("frxEURUSD");
@@ -80,7 +80,32 @@ int main() {
 
 ![example_1](doc/example_1.png)
 
-+ Варианты сделок
++ Методы
+
+*get_balance* - Получить данные о размере депозита
+*get_currency* - Получить данные о валюте депозита
+*init_stream_balance* - Инициализировать поток баланса депозита
+*stop_stream_balance* - Остановить поток баланса депозита
+*download_ticks* - Загрузить исторические данные тиков
+*get_ticks* - Получить исторические данные тиков
+*download_candles* - Загрузить исторические данные минутных свечей
+*get_candles* - Получить исторические данные минутных свечей
+*init_symbols* - Инициализировать список валютных пар
+*init_stream_quotations* - Инициализировать поток котировок
+*stop_stream_quotations* - Остановить поток котировок
+*get_stream_quotations* - Получить данные потока котировок
+*request_servertime* - Запрос на получение времери сервера
+*get_servertime* - Получить время сервера
+Данная функция вернет время сервера после вызова функции request_servertime(), а также если инициализирован поток котировок
+*init_stream_proposal* - Инициализировать поток процентов выплат по ставке по всем валютным парам
+*get_stream_proposal* - Получить данные потока процентов выплат
+Проценты выплат варьируются обычно от 0 до 1.0, где 1.0 соответствует 100% выплате брокера
+*stop_stream_proposal* - Остановить поток процентов выплат
+*is_proposal_stream* - Состояние потока процентов выплат
+*is_quotations_stream* - Состояние потока котировок
+*send_order* - Отправить ордер на октрытие сделки
+
++ Типы контрактов
 
 ```С++
 // типы контрактов
@@ -89,26 +114,6 @@ enum ContractType {
 		SELL = -1, // опцион на продажу
 };
 
-// используется, например, в методе init_stream_proposal
-```
-
-+ Возможные состояния
-
-```С++
-// варианты ошибок API
-enum ErrorType {
-		OK = 0, // процесс завершился удачно
-		NO_AUTHORIZATION = -1, // нет авторизации
-		NO_COMMAND = -2, // не было команды
-		UNKNOWN_ERROR = -3, // неизвестная ошибка
-		NO_INIT = -4, // не было инициализации
-		NO_OPEN_CONNECTION = -5, // нет соединения с сервером
-};
-```
-
-+ Единицы измерения длительности контрактов
-
-```С++
 // длительности контракта
 enum DurationType {
 		TICKS = 0,
@@ -117,21 +122,51 @@ enum DurationType {
 		HOURS = 3,
 		DAYS = 4,
 };
+
+// используется, например, в методе init_stream_proposal или send_order
+
+//...
+
+BinaryAPI BinaryApi(token, api_id);
+double amount = 10.0;
+int duration = 3;
+// открываем сделку
+BinaryApi.send_order("frxEURUSD", amount, BUY, duration, BinaryAPI::MINUTES); 
+
+```
+
++ Возможные состояния ошибок
+
+```С++
+// варианты ошибок API
+enum ErrorType {
+		OK = 0, // процесс завершился удачно
+		NO_AUTHORIZATION = -1, // нет авторизации
+		NO_COMMAND = -2, // не было команды перед использованием метода
+		UNKNOWN_ERROR = -3, // неизвестная ошибка
+		NO_INIT = -4, // не было инициализации перед использованием метода
+		NO_OPEN_CONNECTION = -5, // нет соединения с сервером
+};
+
+std::vector<double> buy_proposal;
+std::vector<double> sell_proposal;
+int err = BinaryApi.get_stream_proposal(buy_proposal, sell_proposal);
+
+if(err == BinaryAPI::OK) {
+	// все в порядке, можно использовать данные в buy_proposal и sell_proposal
+}
+
 ```
 
 ### Готовые программы для ОС Windows
 
 В архиве bin.7z содержится программа *binary_proposal_recorder.exe*, которая записывает каждую секунду проценты выплат с валютных пар (WLDAUD...WLDUSD, AUDCAD, AUDCHF, AUDJPY, AUDNZD, AUDUSD, EURAUD, EURCAD, EURCHF, EURGBP, EURJPY, EURNZD, EURUSD, GBPAUD, GBPCAD, GBPCHF, GBPJPY)
 Проценты выплат записываются для сделок PUT и CALL с временем экспирации 3 минуты. Для расчета процента используется ставка 10 USD.
-Данные записываются в виде JSON строки в файлы в папке data. Каждый файл соответствует конкретной дате и название файла формируется из даты, когда он был записан (например *proposal_29_11_2018.json*). Время для каждой структуры JSON указано в виде timestamp, ключ *time*, используется время сервера Binary (GMT).
-Максимальное число строк в файле соответствует количеству секунд одного дня. 
-Пример JSON строки:
-```json
-{"amount":10.0,"currency":"USD","data":[{"buy":0.8440000000000001,"sell":0.895,"symbol":"WLDAUD"},{"buy":0.7949999999999999,"sell":0.815,"symbol":"WLDEUR"},{"buy":0.7879999999999998,"sell":0.8850000000000002,"symbol":"WLDGBP"},{"buy":0.802,"sell":0.802,"symbol":"WLDUSD"},{"buy":0.7370000000000001,"sell":0.9710000000000001,"symbol":"frxAUDCAD"},{"buy":0.8079999999999998,"sell":0.8859999999999999,"symbol":"frxAUDCHF"},{"buy":0.8350000000000002,"sell":0.887,"symbol":"frxAUDJPY"},{"buy":0.702,"sell":1.0059999999999998,"symbol":"frxAUDNZD"},{"buy":0.784,"sell":0.889,"symbol":"frxAUDUSD"},{"buy":0.855,"sell":0.815,"symbol":"frxEURAUD"},{"buy":0.7570000000000001,"sell":0.8489999999999998,"symbol":"frxEURCAD"},{"buy":0.9120000000000001,"sell":0.7030000000000001,"symbol":"frxEURCHF"},{"buy":0.8559999999999999,"sell":0.0,"symbol":"frxEURGBP"},{"buy":0.0,"sell":0.0,"symbol":"frxEURJPY"},{"buy":0.0,"sell":0.0,"symbol":"frxEURNZD"},{"buy":0.0,"sell":0.0,"symbol":"frxEURUSD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPAUD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPCAD"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPCHF"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPJPY"},{"buy":0.0,"sell":0.0,"symbol":"frxGBPNZD"},{"buy":0.0,"sell":0.0,"symbol":"frxNZDUSD"},{"buy":0.0,"sell":0.0,"symbol":"frxUSDCAD"},{"buy":0.0,"sell":0.0,"symbol":"frxUSDJPY"}],"data_type":"proposal","duration":3,"duration_unit":2,"time":1543463936}
-```
+Данные записываются в виде бинарных файлов. Каждый файл соответствует конкретной дате и название файла формируется из даты, когда он был записан (например *proposal_29_11_2018.hex*). Время для каждого сэмпла указано в виде 8 байт timestamp в конце, используется время сервера Binary (GMT).
+Максимальное число сэмплов в файле соответствует количеству секунд одного дня. 
 
 Настройки программы хранятся в JSON файле *settings.json*. Пример содержимого файла:
-```json
+```java
 {
 	"disk": "D", // диск, на котором находится программа
 	"path": "_repoz//binary_historical_data", // папка (репозиторий git), где будут храниться данные
@@ -139,7 +174,8 @@ enum DurationType {
 	"duration": 3, // время экспирации опциона
 	"duration_uint": 2, // единица измерения времени (2 - минуты)
 	"currency": "USD", // валюта счета 
-	"folder": "proposal_data" // папка, где будут храниться данные процентов выплат
+	"folder": "proposal_data", // папка, где будут храниться данные процентов выплат
+	"git": 1 // использовать git для загрузки данных в репозиторий
 }
 ```
 
