@@ -58,6 +58,8 @@ int main() {
         std::ofstream fp(file_name_pp);
         fp << std::setw(4) << j_pp << std::endl;
         fp.close();
+        make_commit(disk_name, path, file_name_pp);
+
         //
 
         std::cout << "..." << std::endl;

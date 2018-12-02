@@ -1,7 +1,7 @@
 /*
 * binary-cpp-api - Binary C++ API client
 *
-* Copyright (c) 2018 Elektro Yar. Email: electroyar2@gmail.com
+* Copyright (c) 2018 Elektro Yar. Email: git.electroyar@gmail.com
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
