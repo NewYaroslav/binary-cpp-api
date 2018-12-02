@@ -145,15 +145,21 @@ private:
                 }
         }
 //------------------------------------------------------------------------------
-        int send_json_with_authorize(std::string &message)
+        inline void send_message_thread_delay(std::string &message, const int delay)
         {
-                if(is_authorize_) {
+                std::thread([&, message, delay]{
+                        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
                         send_queue_mutex_.lock();
                         send_queue_.push(message);
                         send_queue_mutex_.unlock();
-                        return OK;
-                }
-                return NO_AUTHORIZATION;
+                }).detach();
+        }
+//------------------------------------------------------------------------------
+        inline void send_message(std::string &message)
+        {
+                send_queue_mutex_.lock();
+                send_queue_.push(message);
+                send_queue_mutex_.unlock();
         }
 //------------------------------------------------------------------------------
         int send_json_with_authorize(json &j)
@@ -190,16 +196,9 @@ private:
                                 std::string message = j["echo_req"].dump();
                                 if((*it_error)["code"] == "RateLimit") {
                                         // отправим сообщение повторно с задержкой
-                                        std::thread([&,message]{
-                                                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                send_queue_mutex_.lock();
-                                                send_queue_.push(message);
-                                                send_queue_mutex_.unlock();
-                                        }).detach();
+                                        send_message_thread_delay(message, 1000);
                                 } else {
-                                        send_queue_mutex_.lock();
-                                        send_queue_.push(message);
-                                        send_queue_mutex_.unlock();
+                                        send_message(message);
                                 }
                         } else {
                                 last_time_ = j["time"];
@@ -221,24 +220,17 @@ private:
                                         // попробуем еще раз
                                         std::string message = j["echo_req"].dump();
                                         if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
-                                                std::thread([&,message]{
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        send_queue_mutex_.lock();
-                                                        send_queue_.push(message);
-                                                        send_queue_mutex_.unlock();
-                                                }).detach();
+                                                send_message_thread_delay(message, 1000);
                                         } else {
-                                                send_queue_mutex_.lock();
-                                                send_queue_.push(message);
-                                                send_queue_mutex_.unlock();
+                                                send_message(message);
                                         }
                                 }
                         } else {
                                 auto it_tick = j.find("tick");
-                                double quote = atof(((*it_tick)["quote"].get<std::string>()).c_str());              // котировка
-                                unsigned long long epoch = atoi(((*it_tick)["epoch"].get<std::string>()).c_str());  // время
-                                std::string symbol = (*it_tick)["symbol"];                                          // символ
-                                unsigned long long lastepoch = (epoch/60)*60;                                               // время послденей закрытой свечи
+                                const double quote = atof(((*it_tick)["quote"].get<std::string>()).c_str());              // котировка
+                                const unsigned long long epoch = atoi(((*it_tick)["epoch"].get<std::string>()).c_str());  // время
+                                const std::string symbol = (*it_tick)["symbol"];                                          // символ
+                                const unsigned long long lastepoch = (epoch/60)*60;                                               // время послденей закрытой свечи
 
                                 map_symbol_mutex_.lock();
                                 auto it_symbol = map_symbol_.find(symbol);
@@ -246,11 +238,11 @@ private:
                                         map_symbol_mutex_.unlock();
                                         return true;
                                 }
-                                volatile int indx = it_symbol->second;
+                                const int indx = it_symbol->second;
                                 map_symbol_mutex_.unlock();
 
                                 quotations_mutex_.lock();
-                                size_t data_size = close_data_.size();
+                                const size_t data_size = close_data_.size();
                                 if(indx < (int)data_size) {
                                         if(epoch % 60 == 0) {
                                                 close_data_.at(indx).push_back(quote);
@@ -289,12 +281,7 @@ private:
                                         if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 // попробуем еще раз
                                                 std::string message = j["echo_req"].dump();
-                                                std::thread([&,message]{
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        send_queue_mutex_.lock();
-                                                        send_queue_.push(message);
-                                                        send_queue_mutex_.unlock();
-                                                }).detach();
+                                                send_message_thread_delay(message, 1000);
                                         } else {
                                                 is_stream_quotations_error_ = true;
                                         }
@@ -302,10 +289,10 @@ private:
                                 return true;
                         } else {
                                 auto it_ohlc = j.find("ohlc");
-                                unsigned long long open_time = (*it_ohlc)["open_time"];
-                                unsigned long long epoch = (*it_ohlc)["epoch"];
-                                double _close = atof(((*it_ohlc)["close"].get<std::string>()).c_str());
-                                std::string symbol = (*it_ohlc)["symbol"];
+                                const unsigned long long open_time = (*it_ohlc)["open_time"];
+                                const unsigned long long epoch = (*it_ohlc)["epoch"];
+                                const double _close = atof(((*it_ohlc)["close"].get<std::string>()).c_str());
+                                const std::string symbol = (*it_ohlc)["symbol"];
                                 // находим номер валютной пары
                                 map_symbol_mutex_.lock();
                                 auto it_symbol = map_symbol_.find(symbol);
@@ -317,8 +304,8 @@ private:
                                 map_symbol_mutex_.unlock();
 
                                 quotations_mutex_.lock();
-                                unsigned long long last_open_time = time_data_[indx].back();
-                                unsigned long long data_size = close_data_[indx].size();
+                                const unsigned long long last_open_time = time_data_[indx].back();
+                                const unsigned long long data_size = close_data_[indx].size();
                                 if(indx < data_size) {
                                         if(close_data_[indx].size() > 0) {
                                                 if(last_open_time == open_time) {
@@ -335,7 +322,7 @@ private:
                                 }
                                 quotations_mutex_.unlock();
 
-                                unsigned long long _last_time_ = last_time_;
+                                const unsigned long long _last_time_ = last_time_;
                                 last_time_ = std::max(epoch, _last_time_);
                                 is_last_time_ = true;
                         }
@@ -355,12 +342,7 @@ private:
                                         if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 // попробуем еще раз
                                                 std::string message = j["echo_req"].dump();
-                                                std::thread([&,message]{
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        send_queue_mutex_.lock();
-                                                        send_queue_.push(message);
-                                                        send_queue_mutex_.unlock();
-                                                }).detach();
+                                                send_message_thread_delay(message, 1000);
                                         } else {
                                                 if(j["echo_req"]["subscribe"] != 1) {
                                                         is_array_candles_ = true;
@@ -428,12 +410,7 @@ private:
                                         if((*it_error)["code"] == "RateLimit" || (*it_error)["code"] ==  "MarketIsClosed") {
                                                 // попробуем еще раз
                                                 std::string message = j["echo_req"].dump();
-                                                std::thread([&,message]{
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                        send_queue_mutex_.lock();
-                                                        send_queue_.push(message);
-                                                        send_queue_mutex_.unlock();
-                                                }).detach();
+                                                send_message_thread_delay(message, 1000);
                                         } else {
                                                 if(j["echo_req"]["subscribe"] != 1) {
                                                         is_array_ticks_ = true;
@@ -476,20 +453,13 @@ private:
                                 // попробуем еще раз залогиниться
                                 std::string message = j["echo_req"].dump();
                                 if((*it_error)["code"] == "RateLimit") {
-                                        std::thread([&,message]{
-                                                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                                                send_queue_mutex_.lock();
-                                                send_queue_.push(message);
-                                                send_queue_mutex_.unlock();
-                                        }).detach();
+                                        send_message_thread_delay(message, 1000);
                                 } else {
                                         if((*it_error)["code"] == "InvalidToken") {
                                                 is_error_token_ = true;
                                                 return true;
                                         }
-                                        send_queue_mutex_.lock();
-                                        send_queue_.push(message);
-                                        send_queue_mutex_.unlock();
+                                        send_message(message);
                                 }
                                 is_authorize_ = false;
                         } else {
@@ -517,13 +487,13 @@ private:
                         map_symbol_mutex_.lock();
                         auto it_symbol = map_symbol_.find(_symbol);
                         if(it_symbol != map_symbol_.end()) {
-                                volatile int indx = it_symbol->second;
+                                const int indx = it_symbol->second;
                                 map_symbol_mutex_.unlock();
                                 double temp = 0.0;
                                 if(it_error == j.end()) {
                                         auto it_proposal = j.find("proposal");
-                                        double ask_price = atof(((*it_proposal)["ask_price"].get<std::string>()).c_str());
-                                        double payout = atof(((*it_proposal)["payout"].get<std::string>()).c_str());
+                                        const double ask_price = atof(((*it_proposal)["ask_price"].get<std::string>()).c_str());
+                                        const double payout = atof(((*it_proposal)["payout"].get<std::string>()).c_str());
                                         temp = ask_price != 0 ? (payout/ask_price) - 1 : 0.0;
                                 } else {
                                         if((*it_error)["code"] == "AlreadySubscribed") {
@@ -534,17 +504,10 @@ private:
                                         if((*it_error)["code"] == "RateLimit" ||
                                           (*it_error)["code"] == "ContractBuyValidationError") {
                                                 // отправляем сообщение с задержкой
-                                                std::thread([&,message]{
-                                                        std::this_thread::sleep_for(std::chrono::milliseconds(2500));
-                                                        send_queue_mutex_.lock();
-                                                        send_queue_.push(message);
-                                                        send_queue_mutex_.unlock();
-                                                }).detach();
+                                                send_message_thread_delay(message, 2500);
                                         } else {
                                                 // отправляем сообщение мгновенно
-                                                send_queue_mutex_.lock();
-                                                send_queue_.push(message);
-                                                send_queue_mutex_.unlock();
+                                                send_message(message);
                                         }
                                 }
                                 //std::cout << "6" << std::endl;
