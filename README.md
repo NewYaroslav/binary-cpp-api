@@ -219,7 +219,4 @@ if(err == BinaryAPI::OK) {
 
 Сайт брокера - [https://www.binary.com/](https://www.binary.com/)
 
-### Автор
-
-elektro yar [electroyar2@gmail.com](electroyar2@gmail.com)
 
