@@ -862,9 +862,9 @@ public:
 //------------------------------------------------------------------------------
         /** \brief Загрузить исторические данные тиков
          * \param symbol Имя валютной пары
-         * \param count_ticks Количество тиков. Не имеет смысла ставить данный параметр больше 5000
          * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
          * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \param count_ticks Количество тиков. Не имеет смысла ставить данный параметр больше 5000
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
         int download_ticks(std::string symbol,
@@ -911,8 +911,9 @@ public:
                 if(!is_send_array_ticks_)
                         return NO_COMMAND;
                 is_send_array_ticks_ = false;
-                std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
-                std::chrono::time_point<std::chrono::steady_clock> stop = std::chrono::steady_clock::now();
+                //std::chrono::time_point<std::chrono::steady_clock>
+                auto start = std::chrono::steady_clock::now();
+                auto stop = std::chrono::steady_clock::now();
                 while(true) {
                         std::this_thread::yield();
 
@@ -922,8 +923,9 @@ public:
                         }
 
                         stop = std::chrono::steady_clock::now();
-                        std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
-                        const float MAX_DELAY = 5.0f;
+                        //std::chrono::duration<double>
+                        auto diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                        const float MAX_DELAY = 60.0f;
                         // слишком долго ждем историю
                         if(diff.count() > MAX_DELAY) {
                                 return UNKNOWN_ERROR;
@@ -937,10 +939,6 @@ public:
                         array_ticks_mutex_.lock();
                         json j_prices = array_ticks_["prices"];
                         json j_times = array_ticks_["times"];
-                        if(j_times.size() == 0) {
-                                array_ticks_mutex_.unlock();
-                                return DATA_NOT_AVAILABLE;
-                        }
                         prices.resize(j_prices.size());
                         times.resize(j_times.size());
                         for(size_t i = 0; i < prices.size(); i++) {
@@ -949,17 +947,20 @@ public:
                                 times[i] = atoi((j_times[i].get<std::string>()).c_str()); //atoi(timestr.c_str());
                         }
                         array_ticks_mutex_.unlock();
-                        return OK;
+                        if(times.size() == 0) {
+                                return DATA_NOT_AVAILABLE;
+                        }
                 }
+                return OK;
         }
 //------------------------------------------------------------------------------
         /** \brief Получить исторические данные тиков
          * \param symbol Имя валютной пары
-         * \param count_ticks Количество свечей. Не имеет смысла ставить данный параметр больше 5000
          * \param prices Цены тиков
          * \param times Время тиков
          * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
          * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \param count_ticks Количество тиков. Не имеет смысла ставить данный параметр больше 5000
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
         int get_ticks(std::string symbol,
@@ -975,17 +976,74 @@ public:
                 return get_ticks(prices, times);
         }
 //------------------------------------------------------------------------------
-        /** \brief Загрузить исторические данные минутных свечей
+        /** \brief Получить исторические данные тиков
          * \param symbol Имя валютной пары
-         * \param candles_size Количество свечей. Не имеет смысла ставить данный параметр больше 5000
+         * \param prices Цены тиков
+         * \param times Время тиков
          * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
          * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
+        int get_ticks_without_limits(std::string symbol,
+                                     std::vector<double> &prices,
+                                     std::vector<unsigned long long> &times,
+                                     unsigned long long startepoch,
+                                     unsigned long long endepoch)
+        {
+                if(startepoch == 0 || endepoch == 0 || endepoch < startepoch)
+                        return INVALID_PARAMETER;
+                unsigned long long offset_time = 1;
+                if(symbol.find("R_") != std::string::npos)
+                        offset_time = 2;
+
+                unsigned long long epoch = startepoch;
+                const int COUNT_TICKS_LIMIT = 5000;
+                while(true) {
+                        std::vector<double> _prices;
+                        std::vector<unsigned long long> _times;
+                        unsigned long long _endepoch = epoch + COUNT_TICKS_LIMIT;
+                        if(_endepoch > endepoch) {
+                                _endepoch = endepoch;
+                        }
+                        int err_data = get_ticks(symbol, _prices, _times, epoch, _endepoch);
+                        if(err_data != OK && err_data != DATA_NOT_AVAILABLE)
+                                return err_data;
+
+                        const auto prices_size = prices.size();
+                        const auto times_size = times.size();
+
+                        prices.reserve(prices_size + _prices.size());
+                        times.reserve(times_size + _times.size());
+                        try {
+                                prices.insert(prices.end(), _prices.begin(), _prices.end());
+                                times.insert(times.end(), _times.begin(), _times.end());
+                        }
+                        catch(...) {
+                                prices.erase(prices.begin() + prices_size, prices.end());
+                                times.erase(times.begin() + times_size, times.end());
+                                return UNKNOWN_ERROR;
+                        }
+
+                        if(_endepoch == endepoch) {
+                                break;
+                        }
+                        // чтобы один и тот же момент времени не встречался дважды
+                        epoch = _endepoch + offset_time;
+                } // while
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Загрузить исторические данные минутных свечей
+         * \param symbol Имя валютной пары
+         * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
+         * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \param count_candles Количество свечей. Не имеет смысла ставить данный параметр больше 5000
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
         int download_candles(std::string symbol,
-                             int candles_size,
                              unsigned long long startepoch,
-                             unsigned long long endepoch)
+                             unsigned long long endepoch,
+                             int count_candles = 5000)
         {
                 json j;
                 j["ticks_history"] = symbol;
@@ -993,7 +1051,7 @@ public:
                 else j["end"] = endepoch;
                 if(startepoch == 0) {
                         j["start"] = 1;
-                        j["count"] = candles_size;
+                        j["count"] = count_candles;
                 } else {
                         j["start"] = startepoch;
                 }
@@ -1019,8 +1077,9 @@ public:
                 if(!is_send_array_candles_)
                         return NO_COMMAND;
                 is_send_array_candles_ = false;
-                std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
-                std::chrono::time_point<std::chrono::steady_clock> stop = std::chrono::steady_clock::now();
+                //std::chrono::time_point<std::chrono::steady_clock>
+                auto start = std::chrono::steady_clock::now();
+                auto stop = std::chrono::steady_clock::now();
                 while(true) {
                         std::this_thread::yield();
 
@@ -1030,8 +1089,8 @@ public:
                         }
 
                         stop = std::chrono::steady_clock::now();
-                        std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
-                        const float MAX_DELAY = 5.0f;
+                        auto diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                        const float MAX_DELAY = 60.0f;
                         // слишком долго ждем историю
                         if(diff.count() > MAX_DELAY) {
                                 return UNKNOWN_ERROR;
@@ -1052,30 +1111,80 @@ public:
                                 times[i] = atoi(timestr.c_str());
                         }
                         array_candles_mutex_.unlock();
-                        return OK;
+                        if(times.size() == 0)
+                                return DATA_NOT_AVAILABLE;
                 }
+                return OK;
         }
 //------------------------------------------------------------------------------
         /** \brief Получить исторические данные минутных свечей
          * \param symbol Имя валютной пары
-         * \param candles_size Количество свечей. Не имеет смысла ставить данный параметр больше 5000
          * \param close Цены закрытия свечей
          * \param times Временные метки открытия свечей
          * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
          * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \param count_candles Количество свечей. Не имеет смысла ставить данный параметр больше 5000
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
         int get_candles(std::string symbol,
-                        int candles_size,
                         std::vector<double> &close,
                         std::vector<unsigned long long> &times,
                         unsigned long long startepoch,
-                        unsigned long long endepoch)
+                        unsigned long long endepoch,
+                        int count_candles = 5000)
         {
-                int err_data = download_candles(symbol, candles_size, startepoch, endepoch);
+                int err_data = download_candles(symbol, startepoch, endepoch, count_candles);
                 if(err_data != OK)
                         return err_data;
                 return get_candles(close, times);
+        }
+//------------------------------------------------------------------------------
+        int get_candles_without_limits(std::string symbol,
+                                       std::vector<double> &close,
+                                       std::vector<unsigned long long> &times,
+                                       unsigned long long startepoch,
+                                       unsigned long long endepoch)
+        {
+                if(startepoch == 0 || endepoch == 0 || endepoch < startepoch)
+                        return INVALID_PARAMETER;
+
+                unsigned long long epoch = startepoch;
+                const int COUNT_TICKS_LIMIT = 60*5000;
+                //std::cout << "startepoch " << startepoch << " endepoch " << endepoch << std::endl;
+                while(true) {
+                        std::vector<double> _close;
+                        std::vector<unsigned long long> _times;
+                        unsigned long long _endepoch = epoch + COUNT_TICKS_LIMIT;
+                        if(_endepoch > endepoch) {
+                                _endepoch = endepoch;
+                        }
+                        //std::cout << "epoch " << epoch << " _endepoch " << _endepoch << std::endl;
+                        int err_data = get_candles(symbol, _close, _times, epoch, _endepoch);
+                        if(err_data != OK && err_data != DATA_NOT_AVAILABLE)
+                                return err_data;
+
+                        const auto close_size = close.size();
+                        const auto times_size = times.size();
+
+                        close.reserve(close_size + _close.size());
+                        times.reserve(times_size + _times.size());
+                        try {
+                                close.insert(close.end(), _close.begin(), _close.end());
+                                times.insert(times.end(), _times.begin(), _times.end());
+                        }
+                        catch(...) {
+                                close.erase(close.begin() + close_size, close.end());
+                                times.erase(times.begin() + times_size, times.end());
+                                return UNKNOWN_ERROR;
+                        }
+
+                        if(_endepoch == endepoch) {
+                                break;
+                        }
+                        // чтобы один и тот же момент времени не встречался дважды
+                        epoch = _endepoch + xtime::SEC_MINUTE;
+                } // while
+                return OK;
         }
 //------------------------------------------------------------------------------
         /** \brief Инициализировать список валютных пар
