@@ -26,15 +26,18 @@
 //------------------------------------------------------------------------------
 #include <client_wss.hpp>
 #include <nlohmann/json.hpp>
+#include <xtime.hpp>
 #include <thread>
 #include <string>
 #include <vector>
 #include <queue>
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 //------------------------------------------------------------------------------
 #define BINARY_API_USE_TICKS_HISTORY_SUBSCRIBE 1
+#define BINARY_API_LOG_FILE_NAME "binary_api_log_errors.txt"
 //------------------------------------------------------------------------------
 class BinaryAPI
 {
@@ -51,6 +54,7 @@ public:
                 NO_INIT = -4,
                 NO_OPEN_CONNECTION = -5,
                 INVALID_PARAMETER = -6,
+                DATA_NOT_AVAILABLE = -7,
         };
 
         // типы контрактов
@@ -117,6 +121,8 @@ private:
         std::atomic<bool> is_array_ticks_error_;
         std::atomic<bool> is_send_array_ticks_;
 
+        std::atomic<bool> is_use_log;
+        std::mutex file_log_mutex_;
 //------------------------------------------------------------------------------
         std::string format(const char *fmt, ...)
         {
@@ -184,6 +190,38 @@ private:
                         return OK;
                 }
                 return NO_OPEN_CONNECTION;
+        }
+//------------------------------------------------------------------------------
+        void write_log_file(std::string file_name, std::string message)
+        {
+                if(is_use_log) {
+                        std::thread([&, file_name, message]{
+                                file_log_mutex_.lock();
+                                try {
+                                        std::ofstream file(file_name, std::ios::app);
+                                        if(file) {
+                                                file << message << std::endl;
+                                        }
+                                        file.close();
+                                }
+                                catch(...) {
+
+                                }
+                                file_log_mutex_.unlock();
+                        }).detach();
+                }
+        }
+//------------------------------------------------------------------------------
+        void write_log_file(std::string message)
+        {
+                if(!is_use_log)
+                        return;
+                std::string str_line = "//------------------------------------------------------------------------------\n";
+                std::string error_message = str_line +
+                        "start of error message (" +
+                        xtime::get_str_unix_date_time() + "):\n" +
+                        message + "\nend of error message\n" + str_line;
+                write_log_file(BINARY_API_LOG_FILE_NAME, error_message);
         }
 //------------------------------------------------------------------------------
         bool check_time_message(json &j,
@@ -540,6 +578,14 @@ private:
                          */
                         json::iterator it_msg_type = j.find("msg_type");
                         json::iterator it_error = j.find("error");
+                        if(it_error != j.end()) {
+                                try {
+                                        write_log_file(j.dump());
+                                }
+                                catch (...) {
+                                        write_log_file("check_time_message->j.dump()");
+                                }
+                        }
                         // обрабатываем сообщение
                         if(check_ohlc_message(j, it_msg_type, it_error))
                                 return;
@@ -557,8 +603,9 @@ private:
                                 return;
                 }
                 catch(...) {
-                    std::cout << "BinaryApi: on_message error! Message: " <<
+                        std::cout << "BinaryApi: on_message error! Message: " <<
                         str << std::endl;
+                        write_log_file(str);
                 }
         }
 
@@ -577,6 +624,7 @@ public:
                         is_array_candles_error_(false), is_send_array_candles_(false),
                         is_stream_quotations_error_(false), is_array_ticks_(false),
                         is_array_ticks_error_(false), is_send_array_ticks_(false),
+                        is_use_log(false),
                         last_time_(0), balance_(0)
         {
                 client_.on_open =
@@ -622,6 +670,7 @@ public:
                         is_authorize_ = false;
                         std::cout << "BinaryApi: Closed connection with status code " <<
                                 status << std::endl;
+                        write_log_file("BinaryApi: Closed connection with status code " + std::to_string(status));
                 };
 
                 client_.on_error = [&](std::shared_ptr<WssClient::Connection> /*connection*/,
@@ -631,6 +680,7 @@ public:
                         is_authorize_ = false;
                         std::cout << "BinaryApi: Error: " <<
                                 ec << ", error message: " << ec.message() << std::endl;
+                        write_log_file("BinaryApi: Error, error message: " + ec.message());
                 };
 
                 std::thread client_thread([&]() {
@@ -638,6 +688,8 @@ public:
                                 client_.start();
                                 is_stream_quotations_ = false;
                                 is_stream_proposal_ = false;
+                                is_open_connection_ = false;
+                                is_authorize_ = false;
                                 is_last_time_ = false;
                                 std::this_thread::sleep_for(std::chrono::seconds(5));
                         }
@@ -669,8 +721,8 @@ public:
                                                  */
                                                 num_requestes++; // увеличим число запросов в минуту
                                                 stop_min = std::chrono::steady_clock::now();
-                                                std::chrono::duration<double> diff;
-                                                diff = std::chrono::duration_cast<std::chrono::seconds>(stop_min - start_min);
+                                                //std::chrono::duration<double> diff;
+                                                auto diff = std::chrono::duration_cast<std::chrono::seconds>(stop_min - start_min);
                                                 // проверим количество запросов в минуту
                                                 if(diff.count() < SECONDS_MINUTE) {
                                                         // запросов стало слишком много?
@@ -701,7 +753,7 @@ public:
                                         } else {
                                                 send_queue_mutex_.unlock();
                                                 stop = std::chrono::steady_clock::now();
-                                                std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                                                auto diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
                                                 const float PING_DELAY = 20.0f;
                                                 if(diff.count() > PING_DELAY) {
                                                         json j;
@@ -741,6 +793,21 @@ public:
                         }
                         std::this_thread::yield();
                 }
+        }
+ //------------------------------------------------------------------------------
+        ~BinaryAPI()
+        {
+                if(is_open_connection_) {
+                        client_.stop();
+                }
+        }
+//------------------------------------------------------------------------------
+        /** \brief Запустить или остановить запись логов
+         * \param is_use Если true, то идет запись логов
+         */
+        inline void set_use_log(bool is_use)
+        {
+                is_use_log = is_use;
         }
 //------------------------------------------------------------------------------
         /** \brief Получить данные о размере депозита
@@ -801,10 +868,18 @@ public:
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
         int download_ticks(std::string symbol,
-                           int count_ticks,
                            unsigned long long startepoch,
-                           unsigned long long endepoch)
+                           unsigned long long endepoch,
+                           int count_ticks = 5000)
         {
+                if(startepoch > 0 && endepoch > startepoch) {
+                        unsigned long long diff = endepoch - startepoch;
+                        if((symbol.find("R_") == std::string::npos && diff > 5000)
+                                || (symbol.find("R_") != std::string::npos && diff > 10000))
+                                return INVALID_PARAMETER;
+                }
+                if(count_ticks > 5000)
+                        return INVALID_PARAMETER;
                 json j;
                 j["ticks_history"] = symbol;
                 if(endepoch == 0) j["end"] = "latest";
@@ -862,12 +937,16 @@ public:
                         array_ticks_mutex_.lock();
                         json j_prices = array_ticks_["prices"];
                         json j_times = array_ticks_["times"];
+                        if(j_times.size() == 0) {
+                                array_ticks_mutex_.unlock();
+                                return DATA_NOT_AVAILABLE;
+                        }
                         prices.resize(j_prices.size());
                         times.resize(j_times.size());
                         for(size_t i = 0; i < prices.size(); i++) {
                                 prices[i] = atof((j_prices[i].get<std::string>()).c_str());
-                                std::string timestr = j_times[i].dump();
-                                times[i] = atoi(timestr.c_str());
+                                //std::string timestr = j_times[i].dump();
+                                times[i] = atoi((j_times[i].get<std::string>()).c_str()); //atoi(timestr.c_str());
                         }
                         array_ticks_mutex_.unlock();
                         return OK;
@@ -884,13 +963,13 @@ public:
          * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
          */
         int get_ticks(std::string symbol,
-                        int count_ticks,
                         std::vector<double> &prices,
                         std::vector<unsigned long long> &times,
                         unsigned long long startepoch,
-                        unsigned long long endepoch)
+                        unsigned long long endepoch,
+                        int count_ticks = 5000)
         {
-                int err_data = download_ticks(symbol, count_ticks, startepoch, endepoch);
+                int err_data = download_ticks(symbol, startepoch, endepoch, count_ticks);
                 if(err_data != OK)
                         return err_data;
                 return get_ticks(prices, times);
@@ -1279,7 +1358,7 @@ public:
                                         // число запросов слишком большое, ждем конца минуты
                                         while(true) {
                                                 stop = std::chrono::steady_clock::now();
-                                                std::chrono::duration<double> diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                                                auto diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
                                                 if(diff.count() >= SECONDS_MINUTE) {
                                                         // минута прошла, уходим из ожидания
                                                         start = std::chrono::steady_clock::now();

@@ -4,7 +4,7 @@
 #include <dir.h>
 #include <stdlib.h>
 
-#define BUILD_VER 1.2
+#define BUILD_VER 1.3
 
 using json = nlohmann::json;
 
@@ -33,6 +33,9 @@ int main() {
         // инициализируем список валютных пар
         std::cout << "init_symbols..." << std::endl;
         iBinaryApi.init_symbols(symbols);
+        //
+        iBinaryApi.set_use_log(true);
+        iBinaryApiForTime.set_use_log(true);
         // инициализируем поток процентов выплат
         const double amount = j_settings["amount"];
         const int duration = j_settings["duration"];
@@ -58,7 +61,9 @@ int main() {
         std::ofstream fp(file_name_pp);
         fp << std::setw(4) << j_pp << std::endl;
         fp.close();
-        make_commit(disk_name, path, file_name_pp);
+        if(is_use_git) {
+                make_commit(disk_name, path, file_name_pp);
+        }
 
         //
 
@@ -120,7 +125,7 @@ int main() {
                                                   servertime);
                         }
 
-                        if(old_file_name != file_name && is_use_git) {
+                        if(old_file_name != file_name && is_use_git == 1) {
                                 std::thread make_thread([=]() {
                                         if(old_file_name == "") {
                                                 make_commit(disk_name, path, file_name);
