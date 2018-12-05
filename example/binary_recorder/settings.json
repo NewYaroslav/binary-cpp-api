@@ -1,0 +1,13 @@
+{
+	"disk": "D",
+	"path": "_repoz//binary_historical_data",
+	"amount": 10.0,
+	"duration": 3,
+	"duration_uint": 2,
+	"currency": "USD",
+	"folder": "proposal_data",
+	"folder_proposal": "proposal_data",
+	"folder_quotes_ticks": "quotes_ticks_data",
+	"folder_quotes_bars": "quotes_bars_data",
+	"git": 0
+}
