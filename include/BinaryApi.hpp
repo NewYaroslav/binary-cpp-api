@@ -1006,6 +1006,11 @@ public:
                                 _endepoch = endepoch;
                         }
                         int err_data = get_ticks(symbol, _prices, _times, epoch, _endepoch);
+                        // при возникновении ограничений по получению данных, дата последних доступных данных не меняется
+                        // сервер присылает последние доступные данные, поэтому так и можно проверить
+                        if(_times.size() > 0 && !(_times[0] >= epoch && _times.back() <= _endepoch))
+                                return DATA_NOT_AVAILABLE;
+
                         if(err_data != OK && err_data != DATA_NOT_AVAILABLE)
                                 return err_data;
 
@@ -1160,6 +1165,9 @@ public:
                         }
                         //std::cout << "epoch " << epoch << " _endepoch " << _endepoch << std::endl;
                         int err_data = get_candles(symbol, _close, _times, epoch, _endepoch);
+                        if(_times.size() > 0 && !(_times[0] >= epoch && _times.back() <= _endepoch))
+                                return DATA_NOT_AVAILABLE;
+
                         if(err_data != OK && err_data != DATA_NOT_AVAILABLE)
                                 return err_data;
 

@@ -13,3 +13,6 @@
 [submodule "lib/xtime_cpp"]
 	path = lib/xtime_cpp
 	url = https://github.com/NewYaroslav/xtime_cpp
+[submodule "lib/banana-filesystem-cpp"]
+	path = lib/banana-filesystem-cpp
+	url = https://github.com/NewYaroslav/banana-filesystem-cpp.git

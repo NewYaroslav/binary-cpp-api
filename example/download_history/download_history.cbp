@@ -33,6 +33,7 @@
 					<Add directory="../../lib/xtime_cpp/src" />
 					<Add directory="../../lib/json/include" />
 					<Add directory="../../include" />
+					<Add directory="../../lib/banana-filesystem-cpp/include" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
@@ -53,6 +54,7 @@
 					<Add directory="../../lib/asio/asio/include" />
 					<Add directory="../../lib/json/include" />
 					<Add directory="../../include" />
+					<Add directory="../../lib/banana-filesystem-cpp/include" />
 				</Linker>
 			</Target>
 		</Build>
@@ -61,6 +63,8 @@
 			<Add option="-fexceptions" />
 		</Compiler>
 		<Unit filename="../../include/BinaryApi.hpp" />
+		<Unit filename="../../include/BinaryApiEasy.hpp" />
+		<Unit filename="../../lib/banana-filesystem-cpp/include/banana_filesystem.hpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.cpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.hpp" />
 		<Unit filename="main.cpp" />

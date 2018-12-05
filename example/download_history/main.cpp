@@ -1,6 +1,7 @@
 #include <iostream>
 #include <xtime.hpp>
 #include "BinaryAPI.hpp"
+#include "BinaryApiEasy.hpp"
 
 using namespace std;
 
@@ -15,6 +16,12 @@ int main() {
 
         unsigned long long t1 = xtime::get_unix_timestamp(5,11,2018,0,0,0);
         unsigned long long t2 = t1 + xtime::SEC_DAY;
+
+        std::vector<std::vector<double>> prices2;
+        std::vector<std::vector<unsigned long long>> times2;
+        BinaryApiEasy::download_last_few_days(apiBinary, "frxAUDCAD", t1, prices2, times2, 5, true, BinaryApiEasy::QUOTES_BARS);
+
+        BinaryApiEasy::download_and_save_all_data(apiBinary,"frxAUDCAD","..//..//quotes_bars//frxAUDCAD", t1, true, BinaryApiEasy::QUOTES_BARS, BinaryApiEasy::standart_user_function);
 
 
         std::cout << "get_candles " << apiBinary.get_candles_without_limits("frxEURUSD", candles_close, candles_times, t1 + 30, t2 + xtime::SEC_DAY * 30) << std::endl;
