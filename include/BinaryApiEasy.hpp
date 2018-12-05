@@ -181,7 +181,7 @@ namespace BinaryApiEasy
 //------------------------------------------------------------------------------
         void standart_user_function(std::string str, std::vector<double> &prices, std::vector<unsigned long long> &times, unsigned long long timestamp)
         {
-                std::cout << "write binary quotes file: " << str << " " << xtime::get_str_unix_date_time(times.back()) << std::endl;
+                std::cout << "write binary quotes file: " << str << std::endl;
         }
 //------------------------------------------------------------------------------
         /** \brief Скачать и сохранить все доступыне данные по котировкам

@@ -21,8 +21,7 @@ int main() {
         std::vector<std::vector<unsigned long long>> times2;
         BinaryApiEasy::download_last_few_days(apiBinary, "frxAUDCAD", t1, prices2, times2, 5, true, BinaryApiEasy::QUOTES_BARS);
 
-        BinaryApiEasy::download_and_save_all_data(apiBinary,"frxAUDCAD","..//..//quotes_bars//frxAUDCAD", t1, true, BinaryApiEasy::QUOTES_BARS, BinaryApiEasy::standart_user_function);
-
+        BinaryApiEasy::download_and_save_all_data(apiBinary,"frxAUDCAD","..//..//quotes_ticks//frxAUDCAD", t1, true, BinaryApiEasy::QUOTES_TICKS, BinaryApiEasy::standart_user_function);
 
         std::cout << "get_candles " << apiBinary.get_candles_without_limits("frxEURUSD", candles_close, candles_times, t1 + 30, t2 + xtime::SEC_DAY * 30) << std::endl;
         if(candles_times.size() > 0) {
