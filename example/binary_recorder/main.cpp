@@ -28,6 +28,11 @@ int main() {
 
         BinaryAPI iBinaryApi;
         BinaryAPI iBinaryApiForTime;
+        BinaryAPI iBinaryApiForQuotes;
+
+        iBinaryApi.set_use_log(true);
+        iBinaryApiForTime.set_use_log(true);
+        iBinaryApiForQuotes.set_use_log(true);
 
         std::mutex make_commit_mutex_;
 
@@ -41,8 +46,6 @@ int main() {
         std::cout << "init_symbols..." << std::endl;
         iBinaryApi.init_symbols(symbols_proposal);
         //
-        iBinaryApi.set_use_log(true);
-        iBinaryApiForTime.set_use_log(true);
         // инициализируем поток процентов выплат
         const double amount = j_settings["amount"];
         const int duration = j_settings["duration"];
@@ -164,15 +167,15 @@ int main() {
                                 std::thread download_thread([&, disk_name, path, folder_path_quotes_bars, folder_path_quotes_ticks, servertime, symbols, is_use_git]() {
                                         for(size_t s = 0; s < symbols.size(); ++s) {
                                                 BinaryApiEasy::download_and_save_all_data(
-                                                        iBinaryApiForTime,
+                                                        iBinaryApiForQuotes,
                                                         symbols[s],
                                                         folder_path_quotes_bars + "//" + symbols[s],
                                                         servertime,
                                                         true,
                                                         BinaryApiEasy::QUOTES_BARS,
                                                         BinaryApiEasy::standart_user_function);
-                                                const int DELAY = 2000;
-                                                std::this_thread::sleep_for(std::chrono::milliseconds(DELAY));
+                                                //const int DELAY = 2000;
+                                                //std::this_thread::sleep_for(std::chrono::milliseconds(DELAY));
                                         }
 
                                         if(is_use_git == 1) {
@@ -183,15 +186,15 @@ int main() {
 
                                         for(size_t s = 0; s < symbols.size(); ++s) {
                                                 BinaryApiEasy::download_and_save_all_data(
-                                                        iBinaryApiForTime,
+                                                        iBinaryApiForQuotes,
                                                         symbols[s],
                                                         folder_path_quotes_ticks + "//" + symbols[s],
                                                         servertime,
                                                         true,
                                                         BinaryApiEasy::QUOTES_TICKS,
                                                         BinaryApiEasy::standart_user_function);
-                                                const int DELAY = 2000;
-                                                std::this_thread::sleep_for(std::chrono::milliseconds(DELAY));
+                                                //const int DELAY = 2000;
+                                                //std::this_thread::sleep_for(std::chrono::milliseconds(DELAY));
                                         }
 
                                         if(is_use_git == 1) {
