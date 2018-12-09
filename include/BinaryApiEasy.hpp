@@ -179,17 +179,27 @@ namespace BinaryApiEasy
                 return BinaryAPI::OK;
         }
 //------------------------------------------------------------------------------
+        //int write_binary_quotes_file
+//------------------------------------------------------------------------------
+        /** \brief Стандартный функтор для функции download_and_save_all_data
+         * \param str строка для вывода в консоль
+         * \param prices массив цен
+         * \param times массив временных меток
+         * \param timestamp текущая временная метка
+         */
         void standart_user_function(std::string str, std::vector<double> &prices, std::vector<unsigned long long> &times, unsigned long long timestamp)
         {
                 std::cout << "write binary quotes file: " << str << std::endl;
         }
 //------------------------------------------------------------------------------
         /** \brief Скачать и сохранить все доступыне данные по котировкам
-         *
-         * \param
-         * \param
-         * \return
-         *
+         * \param api Класс BinaryAPI
+         * \param symbol валютная пара
+         * \param path директория, куда сохраняются данные
+         * \param timestamp временная метка, с которой начинается загрузка данных
+         * \param is_skip_day_off флаг пропуска выходных дней, true если надо пропускать выходные
+         * \param type тип загружаемых данных, QUOTES_BARS - минутные бары, QUOTES_TICKS - тики (как правило период 1 секунда)
+         * \param user_function - функтор
          */
         int download_and_save_all_data(BinaryAPI &api,
                                        std::string symbol,
