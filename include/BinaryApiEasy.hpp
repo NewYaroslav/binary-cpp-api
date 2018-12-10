@@ -148,8 +148,8 @@ namespace BinaryApiEasy
                 unsigned long data_size = times.size();
                 file.write(reinterpret_cast<char *>(&data_size),sizeof (data_size));
                 for(int i = 0; i < times.size(); i++) {
-                        file.write(reinterpret_cast<char *>(&prices[i]),sizeof (double));
-                        file.write(reinterpret_cast<char *>(&times[i]),sizeof (unsigned long long));
+                        file.write(reinterpret_cast<char *>(&prices[i]), sizeof(double));
+                        file.write(reinterpret_cast<char *>(&times[i]), sizeof(unsigned long long));
                 }
                 file.close();
         }

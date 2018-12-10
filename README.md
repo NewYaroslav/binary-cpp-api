@@ -10,7 +10,10 @@
 
 ### Как пользоваться?
 
-Чтобы начать использовать BinaryAPI в своей программе, необходимо после подключения всех зависимостей в проект просто добавить заголовочный файл *BinaryAPI.hpp*.
+Чтобы начать использовать BinaryAPI в своей программе, необходимо после подключения всех зависимостей в проект просто добавить заголовочный файл *BinaryAPI.hpp*. Также для использования дополнительных возможностей, упрощающих использование API, можно добавить в проект файлы *BinaryApiEasy.hpp* и *ZstdEasy.hpp*.
+
+Файл *BinaryApiEasy.hpp* содержит функции для загрузки, записи, чтения файлов котировок.
+Файл *ZstdEasy.hpp* позволяет легко использовать библиотеку *zstd* для сжатия и декомпресии файлов котировок.
 
 ### Пример программы
 
@@ -82,7 +85,7 @@ int main() {
 
 ![example_1](doc/example_1.png)
 
-### Методы
+### Методы класса BinaryAPI
 
 * Объявление класса BinaryAPI
 
@@ -314,6 +317,50 @@ enum ErrorType {
 	INVALID_PARAMETER = -6, // какой-то параметр указали неверно
 	DATA_NOT_AVAILABLE = -7, // нет данных, надо жэ...
 };
+
+```
+
+### Функции для работы с алгоритмом сжатия без потерь zstd
+
+* Создание словаря для алгоритма компресии и декомпресии
+
+```С++
+
+#include "ZstdEasy.hpp"
+
+//...
+
+std::string path = "..//..//train"; // путь к папке с примерами обучения
+std::string dictionary_file = "quotes_ticks.zstd"; // имя файла словаря
+size_t dictionary_size = 100 * 1024; // размер словаря
+
+/* Количество сэмплов (фацлов) для обучения дожно быть примерно 1000 шт и более
+ * Как правило, разумный словарь имеет размер ~ 100 КБ.
+ * Рекомендуется предоставить несколько тысяч образцов, хотя это может сильно отличаться
+ * Рекомендуется, чтобы общий размер всех выборок был примерно в x100 раз больше целевого размера словаря
+ */
+
+// начинаем обучение
+int err = ZstdEasy::train_zstd(path, dictionary_file, 1024 * 1024);
+std::cout << "stop train " << err << std::endl;
+
+```
+
+* Компрессия или декомпрессия файлов
+
+```С++
+
+std::string file_name = "..//..//train//frxEURGBP//2015_12_14.hex"; // имя файла, который надо сжать
+std::string compress_file_name = "compress_2015_12_14.hex"; // имя сжатого файла
+std::string dictionary_file = "quotes_ticks.zstd"; // имя файла словаря
+
+// сжимаем файл file_name, получаем файл compress_file_name
+ZstdEasy::compress_file(file_name, compress_file_name, dictionary_file);
+
+std::string decompress_file_name = "decompress_2015_12_14.hex"; // имя файла после декомпресии
+
+// декомпрессия файла compress_file_name, получаем на выходе файл decompress_file_name
+ZstdEasy::decompress_file(compress_file_name, decompress_file_name, dictionary_file);
 
 ```
 
