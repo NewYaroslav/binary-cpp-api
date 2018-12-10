@@ -276,7 +276,7 @@ apiBinary.send_order("frxEURUSD", amount, apiBinary.SELL, duration, apiBinary.MI
 
 * Загрузка исторических данных
 
-```С++
+```C++
 
 // найдем timestamp даты, с которой мы хотим начать загружать историю в виде минутных баров/свечей
 unsigned long long t1 = xtime::get_unix_timestamp(5,11,2018,0,0,0);
@@ -361,6 +361,11 @@ std::string decompress_file_name = "decompress_2015_12_14.hex"; // имя фай
 
 // декомпрессия файла compress_file_name, получаем на выходе файл decompress_file_name
 ZstdEasy::decompress_file(compress_file_name, decompress_file_name, dictionary_file);
+
+```
+
+* Чтение или запись сжатых файлов
+```С++
 
 ```
 
