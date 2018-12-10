@@ -304,7 +304,7 @@ apiBinary.get_ticks_without_limits("frxEURUSD", prices, times, t1, t2)
 
 * Возможные состояния ошибок
 
-```С++
+```C++
 
 // варианты ошибок API
 enum ErrorType {
@@ -324,7 +324,7 @@ enum ErrorType {
 
 * Создание словаря для алгоритма компресии и декомпресии
 
-```С++
+```C++
 
 #include "ZstdEasy.hpp"
 
@@ -348,7 +348,7 @@ std::cout << "stop train " << err << std::endl;
 
 * Компрессия или декомпрессия файлов
 
-```С++
+```C++
 
 std::string file_name = "..//..//train//frxEURGBP//2015_12_14.hex"; // имя файла, который надо сжать
 std::string compress_file_name = "compress_2015_12_14.hex"; // имя сжатого файла
@@ -366,7 +366,22 @@ ZstdEasy::decompress_file(compress_file_name, decompress_file_name, dictionary_f
 
 * Чтение или запись сжатых файлов
 ```С++
+std::vector<double> prices;
+std::vector<unsigned long long> times;
 
+// заполним prices и times данными
+//...
+
+std::string dictionary_file = "quotes_ticks.zstd"; // имя файла словаря
+
+// запишем данные в сжатый файл
+ZstdEasy::write_binary_quotes_compressed_file("compress.zstd", dictionary_file, prices, times);
+// прочитаем сжатый файл
+ZstdEasy::read_binary_quotes_compress_file("compress.zstd", dictionary_file, prices, times);
+std::cout << prices.back() << " " << times.back() << std::endl;
+
+/* Еще есть read_compressed_file и write_compressed_file, которые позволяют записывать и читать любые данные
+ */
 ```
 
 ### Готовые программы для ОС Windows
