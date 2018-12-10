@@ -365,7 +365,8 @@ ZstdEasy::decompress_file(compress_file_name, decompress_file_name, dictionary_f
 ```
 
 * Чтение или запись сжатых файлов
-```С++
+
+```C++
 std::vector<double> prices;
 std::vector<unsigned long long> times;
 
