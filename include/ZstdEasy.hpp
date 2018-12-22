@@ -5,6 +5,13 @@
 #include "dictBuilder/zdict.h"
 #include "zstd.h"
 
+//#define ZSTD_EASY_USE_BINARY_API
+
+#ifdef ZSTD_EASY_USE_BINARY_API
+#include "BinaryAPI.hpp"
+#include "BinaryApiEasy.hpp"
+#endif
+
 namespace ZstdEasy
 {
 
@@ -15,6 +22,11 @@ namespace ZstdEasy
                 NOT_COMPRESS_FILE = -11,
                 NOT_DECOMPRESS_FILE = -12,
                 DATA_SIZE_ERROR = -13,
+        };
+
+        enum QuotesType {
+                QUOTES_TICKS = 0,
+                QUOTES_BARS = 1,
         };
 
 //------------------------------------------------------------------------------
@@ -405,6 +417,112 @@ namespace ZstdEasy
                         return err;
                 }
         }
+//------------------------------------------------------------------------------
+#       ifdef ZSTD_EASY_USE_BINARY_API
+        /** \brief Скачать и сохранить все доступыне данные по котировкам
+         * \param api Класс BinaryAPI
+         * \param symbol валютная пара
+         * \param path директория, куда сохраняются данные
+         * \param dictionary_file файл словаря для декомпресии
+         * \param timestamp временная метка, с которой начинается загрузка данных
+         * \param is_skip_day_off флаг пропуска выходных дней, true если надо пропускать выходные
+         * \param type тип загружаемых данных, QUOTES_BARS - минутные бары, QUOTES_TICKS - тики (как правило период 1 секунда)
+         * \param user_function - функтор
+         */
+        int download_and_save_all_data_with_compression(
+                                       BinaryAPI &api,
+                                       std::string symbol,
+                                       std::string path,
+                                       std::string dictionary_file,
+                                       unsigned long long timestamp,
+                                       bool is_skip_day_off = true,
+                                       int type = QUOTES_BARS,
+                                       void (*user_function)(std::string,
+                                        std::vector<double> &,
+                                        std::vector<unsigned long long> &,
+                                        unsigned long long) = NULL)
+        {
+                bf::create_directory(path);
+                xtime::DateTime iTime(timestamp);
+                iTime.hour = iTime.seconds = iTime.minutes = 0;
+                unsigned long long stop_time = iTime.get_timestamp() - xtime::SEC_DAY;
+                if(is_skip_day_off) {
+                        while(xtime::is_day_off(stop_time)) {
+                                stop_time -= xtime::SEC_DAY;
+                        }
+                }
+                int err = BinaryAPI::OK;
+                int num_download = 0;
+                int num_errors = 0;
+                while(true) {
+                        // сначала выполняем проверку
+                        std::string file_name = path + "//" +
+                                BinaryApiEasy::get_file_name_from_date(stop_time) + ".zstd";
+
+                        if(bf::check_file(file_name)) {
+                                if(is_skip_day_off) {
+                                        stop_time -= xtime::SEC_DAY;
+                                        while(xtime::is_day_off(stop_time)) {
+                                                stop_time -= xtime::SEC_DAY;
+                                        }
+                                } else {
+                                        stop_time -= xtime::SEC_DAY;
+                                }
+                                continue;
+                        }
+
+                        //std::cout << xtime::get_str_unix_date_time(stop_time) << std::endl;
+                        // загружаем файл
+                        std::vector<double> _prices;
+                        std::vector<unsigned long long> _times;
+                        if(type == QUOTES_BARS) {
+                                err = api.get_candles_without_limits(
+                                        symbol,
+                                        _prices,
+                                        _times,
+                                        stop_time,
+                                        stop_time + xtime::SEC_DAY - 1);
+                        } else
+                        if(type == QUOTES_TICKS) {
+                                err = api.get_ticks_without_limits(
+                                        symbol,
+                                        _prices,
+                                        _times,
+                                        stop_time,
+                                        stop_time + xtime::SEC_DAY - 1);
+                        }
+                        if(is_skip_day_off) {
+                                stop_time -= xtime::SEC_DAY;
+                                while(xtime::is_day_off(stop_time)) {
+                                        stop_time -= xtime::SEC_DAY;
+                                }
+                        } else {
+                                stop_time -= xtime::SEC_DAY;
+                        }
+                        if(err == BinaryAPI::OK && _times.size() > 0) { // данные получены
+                                //std::cout << "write_binary_quotes_file: " << file_name << " " << xtime::get_str_unix_date_time(_times.back()) << std::endl;
+                                if(user_function != NULL)
+                                        user_function(file_name, _prices, _times, stop_time);
+                                write_binary_quotes_compressed_file(file_name, dictionary_file, _prices, _times);
+                                num_download++;
+                                num_errors = 0;
+                        } else {
+                                num_errors++;
+                                //std::cout << "num_errors: " << num_errors << std::endl;
+                        }
+                        const int MAX_ERRORS = 30;
+                        if(num_errors > MAX_ERRORS) {
+                                break;
+                        }
+                }
+                if(num_download == 0) {
+                        if(err != BinaryAPI::OK)
+                                return err;
+                        return BinaryApiEasy::NOT_ALL_DATA_DOWNLOADED;
+                }
+                return BinaryAPI::OK;
+        }
+#       endif
 //------------------------------------------------------------------------------
 }
 

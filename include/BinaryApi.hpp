@@ -74,7 +74,7 @@ private:
         WssClient client_; // Класс клиента
         std::shared_ptr<WssClient::Connection> save_connection_; // Соединение
         std::atomic<bool> is_open_connection_; // состояние соединения
-        std::string token_ = "";
+        std::string token_;
         std::mutex token_mutex_;
         std::atomic<bool> is_error_token_;
         std::mutex connection_mutex_;
@@ -343,7 +343,7 @@ private:
 
                                 quotations_mutex_.lock();
                                 const unsigned long long last_open_time = time_data_[indx].back();
-                                const unsigned long long data_size = close_data_[indx].size();
+                                const int data_size = close_data_[indx].size();
                                 if(indx < data_size) {
                                         if(close_data_[indx].size() > 0) {
                                                 if(last_open_time == open_time) {
@@ -617,15 +617,23 @@ public:
          */
         BinaryAPI(std::string token = "", std::string app_id = "1089")
                 : client_("ws.binaryws.com/websockets/v3?l=en&app_id=" +
-                        app_id, false) , token_(token), is_open_connection_(false),
+                        app_id, false) ,
+                        is_open_connection_(false),
+                        token_(token),
                         is_error_token_(false), is_authorize_(false),
-                        is_stream_quotations_(false), is_stream_proposal_(false),
-                        is_last_time_(false), is_array_candles_(false),
-                        is_array_candles_error_(false), is_send_array_candles_(false),
-                        is_stream_quotations_error_(false), is_array_ticks_(false),
-                        is_array_ticks_error_(false), is_send_array_ticks_(false),
+                        is_stream_quotations_(false),
+                        is_stream_quotations_error_(false),
+                        is_stream_proposal_(false),
+                        last_time_(0),
+                        is_last_time_(false),
+                        is_array_candles_(false),
+                        is_array_candles_error_(false),
+                        is_send_array_candles_(false),
+                        is_array_ticks_(false),
+                        is_array_ticks_error_(false),
+                        is_send_array_ticks_(false),
                         is_use_log(false),
-                        last_time_(0), balance_(0)
+                        balance_(0)
         {
                 client_.on_open =
                         [&](std::shared_ptr<WssClient::Connection> connection)

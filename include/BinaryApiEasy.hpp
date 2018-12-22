@@ -33,6 +33,7 @@ namespace BinaryApiEasy
         enum ErrorType {
                 OK = 0,
                 NOT_ALL_DATA_DOWNLOADED = -8,
+                FILE_CANNOT_OPENED = -15,
         };
 
         enum QuotesType {
@@ -134,7 +135,7 @@ namespace BinaryApiEasy
                 return file_name;
         }
 //------------------------------------------------------------------------------
-        /** \brief Записать бинарный файл для котировок
+        /** \brief Записать бинарный файл котировок
          * \param file_name имя файла
          * \param prices котировки
          * \param times временные метки
@@ -166,7 +167,7 @@ namespace BinaryApiEasy
                 // сохраняем
                 std::ifstream file(file_name, std::ios_base::binary);
                 if(!file)
-                        return BinaryAPI::UNKNOWN_ERROR;
+                        return FILE_CANNOT_OPENED;
                 unsigned long data_size = 0;
                 file.read(reinterpret_cast<char *>(&data_size),sizeof (data_size));
                 prices.resize(data_size);
@@ -176,10 +177,57 @@ namespace BinaryApiEasy
                         file.read(reinterpret_cast<char *>(&times[i]),sizeof (unsigned long long));
                 }
                 file.close();
-                return BinaryAPI::OK;
+                return OK;
         }
 //------------------------------------------------------------------------------
-        //int write_binary_quotes_file
+        /** \brief Записать бинарный файл процентов выплат
+         * \param file_name имя файла
+         * \param symbols массив валютных пар
+         * \param duration длительность опциона
+         * \param duration_uint единица измерения длительности бинарного опциона
+         * \param currency валюта пара счета
+         * \param buy_data данные по процентам выплат для BUY бинарного опциона
+         * \param sell_data данные по процентам выплат для SELL бинарного опциона
+         * \param timestamp временная метка
+         */
+        void write_binary_proposal_file(std::string file_name,
+                                        std::vector<std::string> &symbols,
+                                        int duration,
+                                        int duration_uint,
+                                        std::string currency,
+                                        std::vector<double> &buy_data,
+                                        std::vector<double> &sell_data,
+                                        unsigned long long timestamp)
+        {
+                std::ifstream fin(file_name);
+                if(!fin) {
+                        // сохраняем заголовок файла
+                        std::ofstream fout(file_name);
+                        using json = nlohmann::json;
+                        nlohmann::json j;
+                        j["symbols"] = symbols;
+                        j["duration"] = duration;
+                        j["duration_uint"] = duration_uint;
+                        j["currency"] = currency;
+                        const int _sample_len = (2 * sizeof(unsigned short)) * symbols.size() + sizeof (unsigned long long);
+                        j["sample_len"] = _sample_len;
+                        fout << j.dump() << "\n";
+                        fout.close();
+                        fin.close();
+                } else {
+                        fin.close();
+                }
+                // сохраняем
+                std::ofstream fout(file_name, std::ios_base::binary | std::ios::app);
+                for(int i = 0; i < buy_data.size(); i++) {
+                        unsigned short temp_buy = buy_data[i] * 1000;
+                        unsigned short temp_sell = sell_data[i] * 1000;
+                        fout.write(reinterpret_cast<char *>(&temp_buy),sizeof (temp_buy));
+                        fout.write(reinterpret_cast<char *>(&temp_sell),sizeof (temp_sell));
+                }
+                fout.write(reinterpret_cast<char *>(&timestamp),sizeof (timestamp));
+                fout.close();
+        }
 //------------------------------------------------------------------------------
         /** \brief Стандартный функтор для функции download_and_save_all_data
          * \param str строка для вывода в консоль
@@ -280,7 +328,8 @@ namespace BinaryApiEasy
                                 num_errors++;
                                 //std::cout << "num_errors: " << num_errors << std::endl;
                         }
-                        if(num_errors > 30) {
+                        const int MAX_ERRORS = 30;
+                        if(num_errors > MAX_ERRORS) {
                                 break;
                         }
                 }
@@ -292,7 +341,6 @@ namespace BinaryApiEasy
                 return BinaryAPI::OK;
         }
 //------------------------------------------------------------------------------
-
 }
 
 #endif // BINARYAPIEASY_HPP_INCLUDED

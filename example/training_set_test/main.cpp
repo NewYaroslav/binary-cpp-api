@@ -3,9 +3,9 @@
 #include "ZstdEasy.hpp"
 
 int main() {
-#if(0)
+#if(1)
         std::cout << "start train" << std::endl;
-        int err = ZstdEasy::train_zstd("..//..//train","quotes_ticks.zstd", 100 * 1024);
+        int err = ZstdEasy::train_zstd("..//..//train_2","quotes_bars.zstd", 100 * 1024);
         std::cout << "stop train " << err << std::endl;
         return 0;
 #endif
