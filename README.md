@@ -320,6 +320,78 @@ enum ErrorType {
 
 ```
 
+### Функции для работы с файлами
+
+* Загрузить данные за последние пару дней
+
+```C++
+
+#include "BinaryApiEasy.hpp"
+
+//...
+
+BinaryAPI iBinaryApi; // класс для взаимодействия с BinaryApi
+
+std::string symbol = "frxEURUSD";
+unsigned long long timestamp = 12345678910; // день, с которого начнется загрузка
+std::vector<std::vector<double>> prices; // цены (за N дней)
+std::vector<std::vector<unsigned long long>> times; // временные метки (за N дней)
+int num_days = 5; // количество последних дней
+bool is_skip_day_off = true; // пропускать выходные дни
+int type = BinaryApiEasy::QUOTES_BARS;
+
+/* Данная функция загружает полные данные за день за последние N дней
+ * Важно: При этом текущий день не учавствует в загрузке! Это значит,
+ * например, что загружая данные 5 числа в 12 часов дня по GMT за последние 3 дня,
+ * данная функция загрузит 4, 3, 2 дни месяца. Котировок из 5-го числа присутствовать в данных не будет!
+ */
+int err = BinaryApiEasy::download_last_few_days(iBinaryApi, symbol, timestamp, prices, times, num_days, is_skip_day_off, type);
+if(err == BinaryApiEasy:OK) {
+	// загрузка завершилась удачно
+}
+
+```
+
+* Получить имя файла из даты
+
+```C++
+
+unsigned long long timestamp = 12345678910;
+/* Выбрана последовательность ГОД МЕСЯЦ ДЕНЬ чтобы файлы были
+ * в алфавитном порядке
+ * file_name будет содержать имя файла без расширения!
+ */
+std::string file_name = BinaryApiEasy::get_file_name_from_date(timestamp);
+
+```
+
+* Записать бинарный файл котировок
+
+```C++
+
+std::vector<double> prices;
+std::vector<unsigned long long> times;
+// Заполним prices и times ...
+
+std::string file_name = "2015_6_6.hex";
+// Записать бинарный файл котировок
+int err = BinaryApiEasy::write_binary_quotes_file(file_name, prices, times);
+
+```
+
+* Читать бинарный файл котировок
+
+```C++
+
+std::vector<double> prices;
+std::vector<unsigned long long> times;
+
+std::string file_name = "2015_6_6.hex";
+// Читать бинарный файл котировок
+int err = BinaryApiEasy::read_binary_quotes_file(file_name, prices, times);
+
+```
+
 ### Функции для работы с алгоритмом сжатия без потерь zstd
 
 * Создание словаря для алгоритма компресии и декомпресии
@@ -385,6 +457,36 @@ std::cout << prices.back() << " " << times.back() << std::endl;
  */
 ```
 
+* Скачать и сохранить все доступные данные по котировкам
+
+```
+
+/** \brief Скачать и сохранить все доступыне данные по котировкам
+ * \param api Класс BinaryAPI
+ * \param symbol валютная пара
+ * \param path директория, куда сохраняются данные
+ * \param dictionary_file файл словаря для декомпресии
+ * \param timestamp временная метка, с которой начинается загрузка данных
+ * \param is_skip_day_off флаг пропуска выходных дней, true если надо пропускать выходные
+ * \param type тип загружаемых данных, QUOTES_BARS - минутные бары, QUOTES_TICKS - тики (как правило период 1 секунда)
+ * \param user_function - функтор (можно указать NULL, если не нужен)
+ */
+int download_and_save_all_data_with_compression(
+   BinaryAPI &api,
+   std::string symbol,
+   std::string path,
+   std::string dictionary_file,
+   unsigned long long timestamp,
+   bool is_skip_day_off = true,
+   int type = QUOTES_BARS,
+   void (*user_function)(std::string,
+	std::vector<double> &,
+	std::vector<unsigned long long> &,
+	unsigned long long) = NULL);
+			
+```
+
+
 ### Готовые программы для ОС Windows
 
 В архиве bin.7z содержится программа *binary_proposal_recorder.exe*, которая записывает каждую секунду проценты выплат с валютных пар (WLDAUD...WLDUSD, AUDCAD, AUDCHF, AUDJPY, AUDNZD, AUDUSD, EURAUD, EURCAD, EURCHF, EURGBP, EURJPY, EURNZD, EURUSD, GBPAUD, GBPCAD, GBPCHF, GBPJPY)
@@ -411,7 +513,7 @@ std::cout << prices.back() << " " << times.back() << std::endl;
 
 ### Зависимости
 
-* *binary-cpp-api* зависит от следующих внешних библиотек / пакетов
+*binary-cpp-api* зависит от следующих внешних библиотек / пакетов
 
 * *Simple-WebSocket-Server* - [https://gitlab.com/eidheim/Simple-WebSocket-Server](https://gitlab.com/eidheim/Simple-WebSocket-Server)
 * *Boost.Asio* или автономный *Asio* - [http://think-async.com/Asio](http://think-async.com/Asio)
