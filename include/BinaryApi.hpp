@@ -620,7 +620,9 @@ public:
                         app_id, false) ,
                         is_open_connection_(false),
                         token_(token),
-                        is_error_token_(false), is_authorize_(false),
+                        is_error_token_(false),
+                        balance_(0),
+                        is_authorize_(false),
                         is_stream_quotations_(false),
                         is_stream_quotations_error_(false),
                         is_stream_proposal_(false),
@@ -632,8 +634,7 @@ public:
                         is_array_ticks_(false),
                         is_array_ticks_error_(false),
                         is_send_array_ticks_(false),
-                        is_use_log(false),
-                        balance_(0)
+                        is_use_log(false)
         {
                 client_.on_open =
                         [&](std::shared_ptr<WssClient::Connection> connection)

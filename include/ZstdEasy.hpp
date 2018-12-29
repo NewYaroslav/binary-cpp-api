@@ -1,20 +1,43 @@
+/*
+* binary-cpp-api - Binary C++ API client
+*
+* Copyright (c) 2018 Elektro Yar. Email: git.electroyar@gmail.com
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 #ifndef ZSTDEASY_HPP_INCLUDED
 #define ZSTDEASY_HPP_INCLUDED
-
+//------------------------------------------------------------------------------
 #include "banana_filesystem.hpp"
 #include "dictBuilder/zdict.h"
 #include "zstd.h"
-
+//------------------------------------------------------------------------------
 //#define ZSTD_EASY_USE_BINARY_API
 
 #ifdef ZSTD_EASY_USE_BINARY_API
 #include "BinaryAPI.hpp"
 #include "BinaryApiEasy.hpp"
 #endif
-
+//------------------------------------------------------------------------------
 namespace ZstdEasy
 {
-
+//------------------------------------------------------------------------------
         enum ErrorType {
                 OK = 0,
                 NOT_OPEN_FILE = -9,
@@ -223,12 +246,12 @@ namespace ZstdEasy
                 buffer = malloc(buffer_size);
                 size_t buffer_offset = 0;
                 unsigned long data_size = times.size();
-                std::memcpy(buffer + buffer_offset, &data_size, sizeof(data_size));
+                std::memcpy((unsigned char*)buffer + buffer_offset, &data_size, sizeof(data_size));
                 buffer_offset += sizeof(data_size);
                 for(unsigned long i = 0; i < data_size; ++i) {
-                        std::memcpy(buffer + buffer_offset, &prices[i], sizeof(double));
+                        std::memcpy((unsigned char*)buffer + buffer_offset, &prices[i], sizeof(double));
                         buffer_offset += sizeof(double);
-                        std::memcpy(buffer + buffer_offset, &times[i], sizeof(unsigned long long));
+                        std::memcpy((unsigned char*)buffer + buffer_offset, &times[i], sizeof(unsigned long long));
                         buffer_offset += sizeof(unsigned long long);
                 }
                 int err = write_compressed_file(file_name, dictionary_file, buffer, buffer_size, compress_level);
@@ -396,14 +419,14 @@ namespace ZstdEasy
                 if(err == OK) {
                         size_t buffer_offset = 0;
                         unsigned long data_size = 0;
-                        std::memcpy(&data_size, buffer + buffer_offset, sizeof(data_size));
+                        std::memcpy(&data_size, (unsigned char*)buffer + buffer_offset, sizeof(data_size));
                         buffer_offset += sizeof(data_size);
                         prices.resize(data_size);
                         times.resize(data_size);
                         for(unsigned long i = 0; i < data_size; ++i) {
-                                std::memcpy(&prices[i], buffer + buffer_offset, sizeof(double));
+                                std::memcpy(&prices[i], (unsigned char*)buffer + buffer_offset, sizeof(double));
                                 buffer_offset += sizeof(double);
-                                std::memcpy(&times[i], buffer + buffer_offset, sizeof(unsigned long long));
+                                std::memcpy(&times[i], (unsigned char*)buffer + buffer_offset, sizeof(unsigned long long));
                                 buffer_offset += sizeof(unsigned long long);
                         }
                         if(buffer != NULL) {

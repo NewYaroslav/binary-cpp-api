@@ -32,6 +32,8 @@ namespace BinaryApiEasy
 
         enum ErrorType {
                 OK = 0,
+                UNKNOWN_ERROR = -3,
+                INVALID_PARAMETER = -6,
                 NOT_ALL_DATA_DOWNLOADED = -8,
                 FILE_CANNOT_OPENED = -15,
         };
@@ -111,7 +113,7 @@ namespace BinaryApiEasy
                                 num_download++;
                         }
                 }
-                if(num_download != num_days) {
+                if(num_download != (int)num_days) {
                         if(err != BinaryAPI::OK)
                                 return err;
                         return NOT_ALL_DATA_DOWNLOADED;
@@ -148,7 +150,7 @@ namespace BinaryApiEasy
                 std::ofstream file(file_name, std::ios_base::binary);
                 unsigned long data_size = times.size();
                 file.write(reinterpret_cast<char *>(&data_size),sizeof (data_size));
-                for(int i = 0; i < times.size(); i++) {
+                for(size_t i = 0; i < times.size(); i++) {
                         file.write(reinterpret_cast<char *>(&prices[i]), sizeof(double));
                         file.write(reinterpret_cast<char *>(&times[i]), sizeof(unsigned long long));
                 }
@@ -172,7 +174,7 @@ namespace BinaryApiEasy
                 file.read(reinterpret_cast<char *>(&data_size),sizeof (data_size));
                 prices.resize(data_size);
                 times.resize(data_size);
-                for(int i = 0; i < times.size(); i++) {
+                for(size_t i = 0; i < times.size(); i++) {
                         file.read(reinterpret_cast<char *>(&prices[i]),sizeof (double));
                         file.read(reinterpret_cast<char *>(&times[i]),sizeof (unsigned long long));
                 }
@@ -203,7 +205,6 @@ namespace BinaryApiEasy
                 if(!fin) {
                         // сохраняем заголовок файла
                         std::ofstream fout(file_name);
-                        using json = nlohmann::json;
                         nlohmann::json j;
                         j["symbols"] = symbols;
                         j["duration"] = duration;
@@ -219,7 +220,7 @@ namespace BinaryApiEasy
                 }
                 // сохраняем
                 std::ofstream fout(file_name, std::ios_base::binary | std::ios::app);
-                for(int i = 0; i < buy_data.size(); i++) {
+                for(size_t i = 0; i < buy_data.size(); i++) {
                         unsigned short temp_buy = buy_data[i] * 1000;
                         unsigned short temp_sell = sell_data[i] * 1000;
                         fout.write(reinterpret_cast<char *>(&temp_buy),sizeof (temp_buy));
@@ -339,6 +340,64 @@ namespace BinaryApiEasy
                         return NOT_ALL_DATA_DOWNLOADED;
                 }
                 return BinaryAPI::OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Найти первую и последнюю дату файлов
+         * \param file_list список файлов
+         * \param file_extension расширение файла (например .hex или .zstd)
+         * \param beg_timestamp первая дата, встречающееся среди файлов
+         * \param end_timestamp последняя дата, встречающееся среди файлов
+         * \return вернет 0 в случае успеха
+         */
+        int get_beg_end_timestamp(
+                std::vector<std::string> &file_list,
+                std::string file_extension,
+                unsigned long long &beg_timestamp,
+                unsigned long long &end_timestamp) {
+                if(file_list.size() == 0)
+                        return INVALID_PARAMETER;
+                beg_timestamp = std::numeric_limits<unsigned long long>::max();
+                end_timestamp = std::numeric_limits<unsigned long long>::min();
+                for(size_t i = 0; i < file_list.size(); i++) {
+                        std::vector<std::string> path_file;
+                        bf::parse_path(file_list[i], path_file);
+                        if(path_file.size() == 0)
+                                continue;
+                        std::string file_name = path_file.back();
+                        // очищаем слово от расширения
+                        std::size_t first_pos = file_name.find(file_extension);
+                        if(first_pos == std::string::npos)
+                                continue;
+                        unsigned long long time;
+                        std::string word = file_name.substr(0, first_pos);
+                        if(xtime::convert_str_to_timestamp(file_name.substr(0, first_pos), time)) {
+                                if(beg_timestamp > time)
+                                        beg_timestamp = time;
+                                if(end_timestamp < time)
+                                        end_timestamp = time;
+                        }
+                }
+                if(beg_timestamp == std::numeric_limits<unsigned long long>::max() ||
+                        end_timestamp == std::numeric_limits<unsigned long long>::min())
+                        return UNKNOWN_ERROR;
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Найти первую и последнюю дату файлов
+         * \param path директория с файлами исторических данных
+         * \param file_extension расширение файла (например .hex или .zstd)
+         * \param beg_timestamp первая дата, встречающееся среди файлов
+         * \param end_timestamp последняя дата, встречающееся среди файлов
+         * \return вернет 0 в случае успеха
+         */
+        int get_beg_end_timestamp(
+                std::string path,
+                std::string file_extension,
+                unsigned long long &beg_timestamp,
+                unsigned long long &end_timestamp) {
+                std::vector<std::string> file_list;
+                bf::get_list_files(path, file_list, true);
+                return get_beg_end_timestamp(file_list, file_extension, beg_timestamp, end_timestamp);
         }
 //------------------------------------------------------------------------------
 }

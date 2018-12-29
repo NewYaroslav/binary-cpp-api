@@ -32,6 +32,8 @@ namespace HistoricalDataEasy
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
+        /** \brief Класс для удобного использования исторических данных
+         */
         class HistoricalData
         {
         public:
@@ -51,6 +53,9 @@ namespace HistoricalDataEasy
                         WIN = 1,
                         NEUTRAL = 0,
                         LOSS = -1,
+                        END_OF_DATA = 2,
+                        SKIPPING_DATA = -2,
+                        NORMAL_DATA = 0,
                 };
         private:
                 std::string dictionary_file_;
@@ -58,6 +63,7 @@ namespace HistoricalDataEasy
                 std::string current_file_name = "";
                 std::vector<double> prices;
                 std::vector<unsigned long long> times;
+                size_t pos = 0;
 //------------------------------------------------------------------------------
                 int read_file(unsigned long long timestamp)
                 {
@@ -132,6 +138,10 @@ namespace HistoricalDataEasy
 //------------------------------------------------------------------------------
         public:
 //------------------------------------------------------------------------------
+                /** \brief Инициализировать класс
+                 * \param path директория с файлами исторических данных
+                 * \param dictionary_file файл словаря (если указано "", то считываются несжатые файлы)
+                 */
                 HistoricalData(std::string path, std::string dictionary_file = "") :
                 dictionary_file_(dictionary_file), path_(path)
                 {
@@ -139,7 +149,7 @@ namespace HistoricalDataEasy
                 }
 //------------------------------------------------------------------------------
                 /** \brief Получить данные цены тика или цены закрытия свечи
-                 * \param data цена
+                 * \param data цена на указанной временной метке
                  * \param timestamp временная метка
                  * \return состояние огибки, 0 если все в порядке
                  */
@@ -200,7 +210,7 @@ namespace HistoricalDataEasy
                                                         //std::cout << xtime::get_str_unix_date_time(current_time) << std::endl;
                                                         if(t0 == current_time) { // временная метка существует
                                                                 data.push_back(prices[pos]); // добавляем цену
-                                                                if(data.size() == data_size) // если буфер заполнен, выходим
+                                                                if(data.size() == (size_t)data_size) // если буфер заполнен, выходим
                                                                         return OK;
                                                                 t0 += step; // иначе ставим следующую временную метку
                                                                 pos++; // увеличиваем позицию в массивах
@@ -273,6 +283,73 @@ namespace HistoricalDataEasy
                         return OK;
                 }
 //------------------------------------------------------------------------------
+                /** \brief Прочитать все данные из директории
+                 * \param beg_timestamp временная метка начала чтения исторических данных
+                 * \param end_timestamp временная метка конца чтения исторических данных
+                 * \return вернет 0 в случае успеха
+                 */
+                int read_all_data(unsigned long long beg_timestamp, unsigned long long end_timestamp)
+                {
+                        xtime::DateTime t1(beg_timestamp), t2(end_timestamp);
+                        t1.hour = 0; t1.seconds = 0; t1.minutes = 0;
+                        t2.hour = 0; t2.seconds = 0; t2.minutes = 0;
+                        beg_timestamp = t1.get_timestamp();
+                        end_timestamp = t2.get_timestamp();
+                        if(end_timestamp < beg_timestamp)
+                                return INVALID_PARAMETER;
+                        int err = 0;
+                        bool is_error = true;
+                        for(unsigned long long t = beg_timestamp; t <= end_timestamp; t += xtime::SEC_DAY) {
+                                err = add_data_from_file(t);
+                                if(err == OK) {
+                                        is_error = false;
+                                }
+                        }
+                        if(is_error)
+                                return err;
+                        pos = 0;
+                        return OK;
+                }
+//------------------------------------------------------------------------------
+                /** \brief Прочитать все данные из директории
+                 * Данная функция загружает все доступные данные
+                 * \return вернет 0 в случае успеха
+                 */
+                int read_all_data()
+                {
+                        unsigned long long t1, t2;
+                        int err = BinaryApiEasy::get_beg_end_timestamp(path_, ".", t1, t2);
+                        if(err != OK)
+                                return err;
+                        return read_all_data(t1, t2);
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить новую цену
+                 * Данную функцию можно вызывать после read_all_data чтобы последовательно считывать данные из массива.
+                 * \param price цена
+                 * \param timestamp временная метка
+                 * \param status состояние данных (END_OF_DATA - конец данных, SKIPPING_DATA - пропущен бар или тик, NORMAL_DATA - данные считаны нормально)
+                 * \param period_data период данных (для минутных свечей 60, для тиков на сайте binary - 1 секунда)
+                 * \return вернет 0 в случае успеха
+                 */
+                int get_price(double &price, unsigned long long &timestamp, int& status, int period_data = 60)
+                {
+                        if(pos > prices.size()) {
+                                status = END_OF_DATA;
+                                return OK;
+                        } else if(prices.size() > 0) {
+                                price = prices[pos];
+                                timestamp = times[pos];
+                                if(pos > 0 && timestamp != times[pos - 1] + period_data)
+                                        status = SKIPPING_DATA;
+                                else
+                                        status = NORMAL_DATA;
+                                pos++;
+                                return OK;
+                        }
+                        status = END_OF_DATA;
+                        return DATA_NOT_AVAILABLE;
+                }
         };
 }
 //------------------------------------------------------------------------------
