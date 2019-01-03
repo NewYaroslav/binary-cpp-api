@@ -71,6 +71,7 @@
 		<Unit filename="../../include/BinaryApiEasy.hpp" />
 		<Unit filename="../../include/HistoricalDataEasy.hpp" />
 		<Unit filename="../../include/IndicatorsEasy.hpp" />
+		<Unit filename="../../include/NormalizationEasy.hpp" />
 		<Unit filename="../../include/ZstdEasy.hpp" />
 		<Unit filename="../../lib/banana-filesystem-cpp/include/banana_filesystem.hpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.cpp" />

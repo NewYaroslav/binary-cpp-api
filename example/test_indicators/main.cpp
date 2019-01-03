@@ -1,4 +1,5 @@
 #include "IndicatorsEasy.hpp"
+#include "NormalizationEasy.hpp"
 #include "HistoricalDataEasy.hpp"
 
 int main() {
@@ -9,11 +10,14 @@ int main() {
         int PERIOD_MA = 10;
         int PERIOD_MW = 10;
         int PERIOD_RSI = 10;
+        int PERIOD_BB = 20;
+        double STD_DEV_BB = 2;
         IndicatorsEasy::WMA<double> wma(PERIOD_MA);
         IndicatorsEasy::SMA<double> sma(PERIOD_MA);
         IndicatorsEasy::EMA<double> ema(PERIOD_MA);
         IndicatorsEasy::MW<double> mw(PERIOD_MW);
         IndicatorsEasy::RSI<double, IndicatorsEasy::EMA<double>> rsi(PERIOD_RSI);
+        IndicatorsEasy::BollingerBands<double> bb(PERIOD_BB, STD_DEV_BB);
         const int CANDLE_SIZE = 60;
 
         int status = 0;
@@ -28,9 +32,10 @@ int main() {
                         ema.clear();
                         mw.clear();
                         rsi.clear();
+                        bb.clear();
                 }
                 if(status == hist.NORMAL_DATA) {
-                        double wma_out, sma_out, ema_out, rsi_out;
+                        double wma_out, sma_out, ema_out, rsi_out, bb_tl, bb_ml, bb_bl;
                         if(wma.update(price, wma_out) == hist.OK) {
                                 std::cout << "wma: " << wma_out << std::endl;
                         }
@@ -43,6 +48,9 @@ int main() {
                         if(rsi.update(price, rsi_out) ==  hist.OK) {
                                 std::cout << "rsi: " << rsi_out << std::endl;
                         }
+                        if(bb.update(price, bb_tl, bb_ml, bb_bl) == hist.OK) {
+                                std::cout << "bb: " << bb_tl << " " << bb_ml << " " << bb_bl << std::endl;
+                        }
                         std::vector<double> mw_out;
                         if(mw.update(price, mw_out) == hist.OK) {
                                 std::cout << "mw:";
@@ -50,6 +58,14 @@ int main() {
                                         std::cout << " " << mw_out[i];
                                 }
                                 std::cout << std::endl;
+                                std::vector<double> mw_norm_out;
+                                NormalizationEasy::calculate_min_max(mw_out, mw_norm_out, NormalizationEasy::MINMAX_1_1);
+                                std::cout << "mw norm:";
+                                for(size_t i = 0; i < mw_norm_out.size(); ++i) {
+                                        std::cout << " " << mw_norm_out[i];
+                                }
+                                std::cout << std::endl;
+
                                 double temp;
                                 mw.get_std_data(temp);
                                 std::cout << "mw std: " << temp << std::endl;

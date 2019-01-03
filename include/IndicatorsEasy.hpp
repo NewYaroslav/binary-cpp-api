@@ -686,6 +686,113 @@ namespace IndicatorsEasy
                 }
         };
 //------------------------------------------------------------------------------
+        /** \brief Линии Боллинджера
+         */
+        template <typename T>
+        class BollingerBands
+        {
+        private:
+                std::vector<T> data_;
+                int period_ = 0;
+                T d_;
+        public:
+
+                /** \brief Инициализация линий Боллинджера
+                 * \param period период  индикатора
+                 * \param d множитель стандартного отклонения
+                 */
+                BollingerBands(int period, T d)
+                {
+                        period_ = period;
+                        d_ = d;
+                }
+
+                /** \brief Получить новые данные индикатора
+                 * \param in сигнал на входе
+                 * \param out массив на выходе
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int update(T in, T &tl, T &ml, T &bl)
+                {
+                        if(period_ == 0) {
+                                tl = 0;
+                                ml = 0;
+                                bl = 0;
+                                return NO_INIT;
+                        }
+                        if(data_.size() < (size_t)period_) {
+                                data_.push_back(in);
+                                if(data_.size() != (size_t)period_) {
+                                        tl = 0;
+                                        ml = 0;
+                                        bl = 0;
+                                        return INDICATOR_NOT_READY_TO_WORK;
+                                }
+                        } else {
+                                data_.push_back(in);
+                                data_.erase(data_.begin());
+                        }
+                        ml = std::accumulate(data_.begin(), data_.end(), T(0));
+                        ml /= (T)period_;
+                        T sum = 0;
+                        for (int i = 0; i < period_; i++) {
+                                T diff = (data_[i] - ml);
+                                sum +=  diff * diff;
+                        }
+                        T std_dev = std::sqrt(sum / (T)(period_ - 1));
+                        tl = std_dev * d_ + ml;
+                        bl = ml - std_dev * d_;
+                        return OK;
+                }
+
+                /** \brief Протестировать индикатор
+                 * Данная функция отличается от update тем, что не влияет на внутреннее состояние индикатора
+                 * \param in сигнал на входе
+                 * \param out сигнал на выходе
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int test(T in, T &tl, T &ml, T &bl)
+                {
+                        if(period_ == 0) {
+                                tl = 0;
+                                ml = 0;
+                                bl = 0;
+                                return NO_INIT;
+                        }
+                        std::vector<T> data_test = data_;
+                        if(data_test.size() < (size_t)period_) {
+                                data_test.push_back(in);
+                                if(data_test.size() != (size_t)period_) {
+                                        tl = 0;
+                                        ml = 0;
+                                        bl = 0;
+                                        return INDICATOR_NOT_READY_TO_WORK;
+                                }
+                        } else {
+                                data_test.push_back(in);
+                                data_test.erase(data_test.begin());
+                        }
+                        ml = std::accumulate(data_test.begin(), data_test.end(), T(0));
+                        ml /= (T)period_;
+                        T sum = 0;
+                        for (int i = 0; i < period_; i++) {
+                                T diff = (data_test[i] - ml);
+                                sum +=  diff * diff;
+                        }
+                        T std_dev = std::sqrt(sum / (T)(period_ - 1));
+                        tl = std_dev * d_ + ml;
+                        bl = ml - std_dev * d_;
+                        return OK;
+                }
+
+                /** \brief Очистить данные индикатора
+                 */
+                void clear()
+                {
+                        data_.clear();
+                }
+        };
+//------------------------------------------------------------------------------
 }
 
 #endif // INDICATORSEASY_HPP_INCLUDED
