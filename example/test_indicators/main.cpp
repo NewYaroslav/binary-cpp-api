@@ -1,5 +1,6 @@
 #include "IndicatorsEasy.hpp"
 #include "NormalizationEasy.hpp"
+#include "CorrelationEasy.hpp"
 #include "HistoricalDataEasy.hpp"
 
 int main() {
@@ -63,8 +64,13 @@ int main() {
                                 std::cout << "mw norm:";
                                 for(size_t i = 0; i < mw_norm_out.size(); ++i) {
                                         std::cout << " " << mw_norm_out[i];
+                                        mw_norm_out[i] += i * 0.1;
                                 }
                                 std::cout << std::endl;
+
+                                double p = 0;
+                                CorrelationEasy::calculate_spearman_rank_correlation_coefficient(mw_out, mw_norm_out, p);
+                                std::cout << "spearman corr: " << p << std::endl;
 
                                 double temp;
                                 mw.get_std_data(temp);

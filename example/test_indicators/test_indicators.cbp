@@ -69,6 +69,7 @@
 		</Compiler>
 		<Unit filename="../../include/BinaryAPI.hpp" />
 		<Unit filename="../../include/BinaryApiEasy.hpp" />
+		<Unit filename="../../include/CorrelationEasy.hpp" />
 		<Unit filename="../../include/HistoricalDataEasy.hpp" />
 		<Unit filename="../../include/IndicatorsEasy.hpp" />
 		<Unit filename="../../include/NormalizationEasy.hpp" />
