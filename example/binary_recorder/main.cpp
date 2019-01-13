@@ -1,7 +1,8 @@
 #include "BinaryAPI.hpp"
 #include "BinaryApiEasy.hpp"
+#include "ZstdEasy.hpp"
 
-#define BUILD_VER 1.0
+#define BUILD_VER 1.1
 
 using json = nlohmann::json;
 
@@ -13,15 +14,6 @@ std::vector<std::string> get_all_symbols_binary();
 std::vector<std::string> get_proposal_symbols_binary();
 
 void make_commit(std::string disk, std::string path, std::string new_file);
-
-void write_binary_file(std::string file_name,
-                       std::vector<std::string> &symbols,
-                       int duration,
-                       int duration_uint,
-                       std::string currency,
-                       std::vector<double> &buy_data,
-                       std::vector<double> &sell_data,
-                       unsigned long long timestamp);
 
 int main() {
         std::cout << "build version " << (float)BUILD_VER << std::endl;
@@ -56,6 +48,8 @@ int main() {
         const std::string folder_name_quotes_bars = j_settings["folder_quotes_bars"];
         const std::string disk_name = j_settings["disk"];
         const std::string path = j_settings["path"];
+        const std::string dictionary_quotes_ticks_file = j_settings["dictionary_quotes_ticks_file"];
+        const std::string dictionary_quotes_bars_file = j_settings["dictionary_quotes_bars_file"];
         int is_use_git = j_settings["git"];
         std::string old_file_name = "";
 
@@ -138,14 +132,15 @@ int main() {
                                                       ".hex";
                         // если не выходной, сохраняем файлы
                         if(!xtime::is_day_off(servertime)) {
-                                write_binary_file(file_name,
-                                                  symbols_proposal,
-                                                  duration,
-                                                  duration_uint,
-                                                  currency,
-                                                  buy_data,
-                                                  sell_data,
-                                                  servertime);
+                                BinaryApiEasy::write_binary_proposal_file(
+                                        file_name,
+                                        symbols_proposal,
+                                        duration,
+                                        duration_uint,
+                                        currency,
+                                        buy_data,
+                                        sell_data,
+                                        servertime);
                         }
 
                         if(old_file_name != file_name) {
@@ -166,10 +161,11 @@ int main() {
 
                                 std::thread download_thread([&, disk_name, path, folder_path_quotes_bars, folder_path_quotes_ticks, servertime, symbols, is_use_git]() {
                                         for(size_t s = 0; s < symbols.size(); ++s) {
-                                                BinaryApiEasy::download_and_save_all_data(
+                                                ZstdEasy::download_and_save_all_data_with_compression(
                                                         iBinaryApiForQuotes,
                                                         symbols[s],
                                                         folder_path_quotes_bars + "//" + symbols[s],
+                                                        dictionary_quotes_bars_file,
                                                         servertime,
                                                         true,
                                                         BinaryApiEasy::QUOTES_BARS,
@@ -185,10 +181,11 @@ int main() {
                                         }
 
                                         for(size_t s = 0; s < symbols.size(); ++s) {
-                                                BinaryApiEasy::download_and_save_all_data(
+                                                ZstdEasy::download_and_save_all_data_with_compression(
                                                         iBinaryApiForQuotes,
                                                         symbols[s],
                                                         folder_path_quotes_ticks + "//" + symbols[s],
+                                                        dictionary_quotes_ticks_file,
                                                         servertime,
                                                         true,
                                                         BinaryApiEasy::QUOTES_TICKS,
@@ -353,45 +350,6 @@ std::string format(const char *fmt, ...)
                 v.resize(size);
                 va_end(args2);
         }
-}
-
-void write_binary_file(std::string file_name,
-                       std::vector<std::string> &symbols,
-                       int duration,
-                       int duration_uint,
-                       std::string currency,
-                       std::vector<double> &buy_data,
-                       std::vector<double> &sell_data,
-                       unsigned long long timestamp)
-{
-        // проверяем, был ли создан файл?
-        std::ifstream fin(file_name);
-        if(!fin) {
-                // сохраняем заголовок файла
-                std::ofstream fout(file_name);
-                json j;
-                j["symbols"] = symbols;
-                j["duration"] = duration;
-                j["duration_uint"] = duration_uint;
-                j["currency"] = currency;
-                const int _sample_len = (2 * sizeof(unsigned short)) * symbols.size() + sizeof (unsigned long long);
-                j["sample_len"] = _sample_len;
-                fout << j.dump() << "\n";
-                fout.close();
-                fin.close();
-        } else {
-                fin.close();
-        }
-        // сохраняем
-        std::ofstream fout(file_name, std::ios_base::binary | std::ios::app);
-        for(int i = 0; i < buy_data.size(); i++) {
-                unsigned short temp_buy = buy_data[i] * 1000;
-                unsigned short temp_sell = sell_data[i] * 1000;
-                fout.write(reinterpret_cast<char *>(&temp_buy),sizeof (temp_buy));
-                fout.write(reinterpret_cast<char *>(&temp_sell),sizeof (temp_sell));
-        }
-        fout.write(reinterpret_cast<char *>(&timestamp),sizeof (timestamp));
-        fout.close();
 }
 
 void save_json(std::string file_name, json &j) {

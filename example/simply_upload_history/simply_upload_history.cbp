@@ -2,12 +2,12 @@
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
-		<Option title="binary_recorder" />
+		<Option title="simply_upload_history" />
 		<Option pch_mode="2" />
 		<Option compiler="mingw_64_7_3_0" />
 		<Build>
 			<Target title="Debug">
-				<Option output="bin/Debug/binary_recorder" prefix_auto="1" extension_auto="1" />
+				<Option output="bin/Debug/simply_upload_history" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -16,7 +16,7 @@
 				</Compiler>
 			</Target>
 			<Target title="Release">
-				<Option output="bin/Release/binary_recorder" prefix_auto="1" extension_auto="1" />
+				<Option output="bin/Release/simply_upload_history" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />

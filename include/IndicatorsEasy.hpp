@@ -28,6 +28,8 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <CorrelationEasy.hpp>
+#include <NormalizationEasy.hpp>
 //------------------------------------------------------------------------------
 namespace IndicatorsEasy
 {
@@ -101,7 +103,7 @@ namespace IndicatorsEasy
                         data_.reserve(period_);
                 }
 
-                /** \brief Получить новые данные индикатора
+                /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
                  * \param out сигнал на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
@@ -186,7 +188,7 @@ namespace IndicatorsEasy
                         data_.reserve(period_);
                 }
 
-                /** \brief Получить новые данные индикатора
+                /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
                  * \param out сигнал на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
@@ -290,7 +292,7 @@ namespace IndicatorsEasy
                         a = 2.0/(T)(period_ + 1.0d);
                 }
 
-                /** \brief Получить новые данные индикатора
+                /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
                  * \param out сигнал на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
@@ -384,7 +386,7 @@ namespace IndicatorsEasy
                         data_.reserve(period_);
                 }
 
-                /** \brief Получить новые данные индикатора
+                /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
                  * \param out массив на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
@@ -606,7 +608,7 @@ namespace IndicatorsEasy
 
                 }
 
-                /** \brief Получить новые данные индикатора
+                /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
                  * \param out массив на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
@@ -707,7 +709,7 @@ namespace IndicatorsEasy
                         d_ = d;
                 }
 
-                /** \brief Получить новые данные индикатора
+                /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
                  * \param out массив на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
@@ -793,6 +795,163 @@ namespace IndicatorsEasy
                 }
         };
 //------------------------------------------------------------------------------
+        /** \brief Класс для подсчета коррлеяции между валютными парами
+         */
+        template <typename T>
+        class CurrencyCorrelation
+        {
+        private:
+                std::vector<std::vector<T>> data_;
+                std::vector<std::vector<T>> data_test_;
+                int period_ = 0;
+                bool is_test_ = false;
+        public:
+                enum CorrelationType {
+                        SPEARMAN_RANK = 0,
+                        PEARSON = 1,
+                };
+                /** \brief Инициализировать индикатор
+                 * \param period период индикатора
+                 * \param num_symbols колючество валютных пар
+                 */
+                CurrencyCorrelation(int period, int num_symbols)
+                {
+                        data_.resize(num_symbols);
+                        data_test_.resize(num_symbols);
+                        period_ = period;
+                }
+
+                /** \brief Обновить состояние индикатора
+                 * \param in сигнал на входе
+                 * \param num_symbol номер валютной пары
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int update(T in, int num_symbol)
+                {
+                        is_test_ = false;
+                        if(period_ == 0) {
+                                return NO_INIT;
+                        }
+                        if(data_[num_symbol].size() < (size_t)period_) {
+                                data_[num_symbol].push_back(in);
+                                if(data_[num_symbol].size() == (size_t)period_) {
+                                        return OK;
+                                }
+                        } else {
+                                data_[num_symbol].push_back(in);
+                                data_[num_symbol].erase(data_[num_symbol].begin());
+                                return OK;
+                        }
+                        return INDICATOR_NOT_READY_TO_WORK;
+                }
+
+                /** \brief Обновить состояние индикатора
+                 * \param in сигнал на входе
+                 * \param num_symbol номер валютной пары
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int test(T in, int num_symbol)
+                {
+                        is_test_ = true;
+                        if(period_ == 0) {
+                                return NO_INIT;
+                        }
+                        data_test_ = data_;
+                        if(data_test_[num_symbol].size() < (size_t)period_) {
+                                data_test_[num_symbol].push_back(in);
+                                if(data_test_[num_symbol].size() == (size_t)period_) {
+                                        return OK;
+                                }
+                        } else {
+                                data_test_[num_symbol].push_back(in);
+                                data_test_[num_symbol].erase(data_test_[num_symbol].begin());
+                                return OK;
+                        }
+                        return INDICATOR_NOT_READY_TO_WORK;
+                }
+
+                /** \brief Посчитать корреляцию между двумя валютными парами
+                 * \param out значение корреляции
+                 * \param num_symbol_1 номер первой валютной пары
+                 * \param num_symbol_2 номер второй валютной пары
+                 * \param correlation_type тип корреляции (SPEARMAN_RANK, PEARSON)
+                 * \return состояние ошибки, 0 в случае успеха
+                 */
+                int calculate_correlation(T &out, int num_symbol_1, int num_symbol_2, int correlation_type = SPEARMAN_RANK)
+                {
+                        std::vector<T> norm_vec_1, norm_vec_2;
+                        if(is_test_) {
+                                if(data_test_[num_symbol_1].size() == (size_t)period_ &&
+                                        data_test_[num_symbol_2].size() == (size_t)period_) {
+                                        if(correlation_type == SPEARMAN_RANK) {
+                                                NormalizationEasy::calculate_min_max(data_test_[num_symbol_1], norm_vec_1, NormalizationEasy::MINMAX_1_1);
+                                                NormalizationEasy::calculate_min_max(data_test_[num_symbol_2], norm_vec_2, NormalizationEasy::MINMAX_1_1);
+                                                return CorrelationEasy::calculate_spearman_rank_correlation_coefficient(norm_vec_1, norm_vec_2, out);
+                                        } else
+                                        if(correlation_type == PEARSON) {
+                                                NormalizationEasy::calculate_min_max(data_test_[num_symbol_1], norm_vec_1, NormalizationEasy::MINMAX_1_1);
+                                                NormalizationEasy::calculate_min_max(data_test_[num_symbol_2], norm_vec_2, NormalizationEasy::MINMAX_1_1);
+                                                return CorrelationEasy::calculate_pearson_correlation_coefficient(norm_vec_1, norm_vec_2, out);
+                                        } else {
+                                                return INVALID_PARAMETER;
+                                        }
+                                }
+                        } else {
+                                if(data_[num_symbol_1].size() == (size_t)period_ &&
+                                        data_[num_symbol_2].size() == (size_t)period_) {
+                                        if(correlation_type == SPEARMAN_RANK) {
+                                                NormalizationEasy::calculate_min_max(data_[num_symbol_1], norm_vec_1, NormalizationEasy::MINMAX_1_1);
+                                                NormalizationEasy::calculate_min_max(data_[num_symbol_2], norm_vec_2, NormalizationEasy::MINMAX_1_1);
+                                                return CorrelationEasy::calculate_spearman_rank_correlation_coefficient(norm_vec_1, norm_vec_2, out);
+                                        } else
+                                        if(correlation_type == PEARSON) {
+                                                NormalizationEasy::calculate_min_max(data_[num_symbol_1], norm_vec_1, NormalizationEasy::MINMAX_1_1);
+                                                NormalizationEasy::calculate_min_max(data_[num_symbol_2], norm_vec_2, NormalizationEasy::MINMAX_1_1);
+                                                return CorrelationEasy::calculate_pearson_correlation_coefficient(norm_vec_1, norm_vec_2, out);
+                                        } else {
+                                                return INVALID_PARAMETER;
+                                        }
+                                }
+                        }
+                        return INDICATOR_NOT_READY_TO_WORK;
+                }
+
+                /** \brief Найти коррелирующие валютные пары
+                 * \param symbol_1 список первой валютной пары в коррелирующей паре
+                 * \param symbol_2 список второй валютной пары в коррелирующей паре
+                 * \param threshold_coefficient порог срабатывания для коэффициента корреляции
+                 * \param correlation_type тип корреляции (SPEARMAN_RANK, PEARSON)
+                 */
+                void find_correlated_pairs(std::vector<int> &symbol_1, std::vector<int> &symbol_2, std::vector<T> &coefficient, T threshold_coefficient, int correlation_type = SPEARMAN_RANK)
+                {
+                        symbol_1.clear();
+                        symbol_2.clear();
+                        coefficient.clear();
+                        if(is_test_) {
+                                for(size_t i = 0; i < data_test_.size() - 1; ++i) {
+                                        for(size_t j = i + 1; j < data_test_.size(); ++j) {
+                                                T coeff;
+                                                if(calculate_correlation(coeff, i, j, correlation_type) == OK) {
+                                                        if(std::abs(coeff) > threshold_coefficient) {
+                                                                symbol_1.push_back(i);
+                                                                symbol_2.push_back(j);
+                                                                coefficient.push_back(coeff);
+                                                        }
+                                                }
+                                        }
+                                }
+                        }
+                }
+
+                /** \brief Очистить данные индикатора
+                 */
+                void clear()
+                {
+                        data_.clear();
+                        data_test_.clear();
+                }
+        };
+//------------------------------------------------------------------------------
         /** \brief Мера склонности к чередовнию знаков (z-счет)
          * Z - число СКО, на которое количество серий в выборке отклоняется от своего математчиеского ожидания
          * Если z > 3, то с вероятностью 0,9973 знаки имеют склонность к чередованию
@@ -806,7 +965,7 @@ namespace IndicatorsEasy
         double calc_z_score(int n, int r, int w, int l)
         {
                 double P = 2.0d * w * l;
-                return (n * ((double)r - 0.5d) -  P) / sqrt((P * (P - (double)n))/((double)n - 1.0d))
+                return (n * ((double)r - 0.5d) -  P) / sqrt((P * (P - (double)n))/((double)n - 1.0d));
         }
 //------------------------------------------------------------------------------
         /** \brief Рассчитать долю капитала для стратегии на основе меры склонности к чередовнию знаков
