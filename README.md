@@ -493,10 +493,16 @@ int download_and_save_all_data_with_compression(
 
 ### Готовые программы для ОС Windows
 
-В архиве bin.7z содержится программа *binary_proposal_recorder.exe*, которая записывает каждую секунду проценты выплат с валютных пар (WLDAUD...WLDUSD, AUDCAD, AUDCHF, AUDJPY, AUDNZD, AUDUSD, EURAUD, EURCAD, EURCHF, EURGBP, EURJPY, EURNZD, EURUSD, GBPAUD, GBPCAD, GBPCHF, GBPJPY)
+В архиве bin.7z содержится несколько программ.
+
+Программа *binary_recorder.exe* записывает проценты выплат для каждой секунды, а также загружает исторические данные тиков и минутных баров за цельный рабочий день.
+
+Программа *binary_proposal_recorder.exe*, которая записывает каждую секунду проценты выплат с валютных пар (WLDAUD...WLDUSD, AUDCAD, AUDCHF, AUDJPY, AUDNZD, AUDUSD, EURAUD, EURCAD, EURCHF, EURGBP, EURJPY, EURNZD, EURUSD, GBPAUD, GBPCAD, GBPCHF, GBPJPY)
 Проценты выплат записываются для сделок PUT и CALL с временем экспирации 3 минуты. Для расчета процента используется ставка 10 USD.
 Данные записываются в виде бинарных файлов. Каждый файл соответствует конкретной дате и название файла формируется из даты, когда он был записан (например *proposal_29_11_2018.hex*). Время для каждого сэмпла указано в виде 8 байт timestamp в конце, используется время сервера Binary (GMT).
 Максимальное число сэмплов в файле соответствует количеству секунд одного дня. 
+
+Программа *simply_upload_history.exe* загружает исторические данные котировок.
 
 Настройки программы хранятся в JSON файле *settings.json*. Пример содержимого файла:
 ```java
