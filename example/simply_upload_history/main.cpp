@@ -2,16 +2,14 @@
 #include "BinaryApiEasy.hpp"
 #include "ZstdEasy.hpp"
 
-#define BUILD_VER 1.0
+#define BUILD_VER 1.1
 
 using json = nlohmann::json;
 
 void save_json(std::string file_name, json &j);
 void open_json(std::string file_name, json &j);
-std::string format(const char *fmt, ...);
 
 std::vector<std::string> get_all_symbols_binary();
-std::vector<std::string> get_proposal_symbols_binary();
 
 void user_function_quotes_ticks(std::string str, std::vector<double> &prices, std::vector<unsigned long long> &times, unsigned long long timestamp)
 {
@@ -25,9 +23,6 @@ void user_function_quotes_bars(std::string str, std::vector<double> &prices, std
 
 int main() {
         std::cout << "build version " << (float)BUILD_VER << std::endl;
-        BinaryAPI iBinaryApiForQuotes;
-        iBinaryApiForQuotes.set_use_log(true);
-
         json j_settings;
         open_json("settings.json", j_settings);
         std::cout << std::setw(4) << j_settings << std::endl;
@@ -44,44 +39,58 @@ int main() {
         // сохраним список валютных пар и параметры в отдельный файл
         json j_qp;
         j_qp["symbols"] = symbols;
-
+        // получим директории и имена файлов
         std::string folder_path_quotes_ticks = disk_name + ":\\" + path + "\\" + folder_name_quotes_ticks;
         std::string folder_path_quotes_bars = disk_name + ":\\" + path + "\\" + folder_name_quotes_bars;
         std::string file_name_qt = folder_path_quotes_ticks + "\\parameters.json";
         std::string file_name_qb = folder_path_quotes_bars + "\\parameters.json";
-
+        // созазтм необходимые директории
         bf::create_directory(folder_path_quotes_ticks);
         bf::create_directory(folder_path_quotes_bars);
+        // сохраним файлы настроек
         save_json(file_name_qb, j_qp);
         save_json(file_name_qt, j_qp);
 
-        std::cout << "..." << std::endl;
         unsigned long long servertime = xtime::get_unix_timestamp();
-        std::thread download_thread([&, disk_name, path, folder_path_quotes_bars, folder_path_quotes_ticks, servertime, symbols]() {
-                for(size_t s = 0; s < symbols.size(); ++s) {
-                        ZstdEasy::download_and_save_all_data_with_compression(
-                                iBinaryApiForQuotes,
-                                symbols[s],
-                                folder_path_quotes_bars + "//" + symbols[s],
-                                dictionary_quotes_bars_file,
-                                servertime,
-                                true,
-                                BinaryApiEasy::QUOTES_BARS,
-                                user_function_quotes_bars);
-                }
-                for(size_t s = 0; s < symbols.size(); ++s) {
-                        ZstdEasy::download_and_save_all_data_with_compression(
-                                iBinaryApiForQuotes,
-                                symbols[s],
-                                folder_path_quotes_ticks + "//" + symbols[s],
-                                dictionary_quotes_ticks_file,
-                                servertime,
-                                true,
-                                BinaryApiEasy::QUOTES_TICKS,
-                                user_function_quotes_ticks);
-                }
-        });
-        download_thread.join();
+        // запустим загрузку котировок в несколько потоков
+        int num_threads = std::thread::hardware_concurrency();
+        std::cout << "hardware concurrency: " << num_threads << std::endl;
+        for(int t = 0; t < num_threads; ++t) {
+                std::thread download_thread([&, disk_name, path, folder_path_quotes_bars, folder_path_quotes_ticks, servertime, symbols, t, num_threads]() {
+                        BinaryAPI iBinaryApiForQuotes;
+                        iBinaryApiForQuotes.set_use_log(true);
+                        for(size_t s = t; s < symbols.size(); s += num_threads) {
+                                bool is_skip_day_off = true;
+                                // проверим, есть ли смысл загружать котировки за выходные дни
+                                if(symbols[s] == "R_100" || symbols[s] == "R_50" || symbols[s] == "R_25" || symbols[s] == "R_10") {
+                                        is_skip_day_off = false;
+                                }
+                                ZstdEasy::download_and_save_all_data_with_compression(
+                                        iBinaryApiForQuotes,
+                                        symbols[s],
+                                        folder_path_quotes_ticks + "//" + symbols[s],
+                                        dictionary_quotes_ticks_file,
+                                        servertime,
+                                        is_skip_day_off,
+                                        BinaryApiEasy::QUOTES_TICKS,
+                                        user_function_quotes_ticks);
+
+                                ZstdEasy::download_and_save_all_data_with_compression(
+                                        iBinaryApiForQuotes,
+                                        symbols[s],
+                                        folder_path_quotes_bars + "//" + symbols[s],
+                                        dictionary_quotes_bars_file,
+                                        servertime,
+                                        true,
+                                        BinaryApiEasy::QUOTES_BARS,
+                                        user_function_quotes_bars);
+                        } // for s
+                });
+                download_thread.detach();
+        } // for t
+        while(true) {
+
+        }
         std::cout << "The program has completed" << std::endl;
         std::cin;
         return 0;
@@ -127,77 +136,12 @@ std::vector<std::string> get_all_symbols_binary() {
         vsymbol.push_back("frxUSDNOK");
         vsymbol.push_back("frxUSDPLN");
         vsymbol.push_back("frxUSDSEK");
+
+        vsymbol.push_back("R_100");
+        vsymbol.push_back("R_50");
+        vsymbol.push_back("R_25");
+        vsymbol.push_back("R_10");
         return vsymbol;
-}
-
-std::vector<std::string> get_proposal_symbols_binary() {
-        std::vector<std::string> vsymbol;
-        vsymbol.push_back("WLDAUD");
-        vsymbol.push_back("WLDEUR");
-        vsymbol.push_back("WLDGBP");
-        vsymbol.push_back("WLDUSD");
-
-        vsymbol.push_back("frxAUDCAD");
-        vsymbol.push_back("frxAUDCHF");
-        vsymbol.push_back("frxAUDJPY");
-        vsymbol.push_back("frxAUDNZD");
-        vsymbol.push_back("frxAUDUSD");
-
-        vsymbol.push_back("frxEURAUD");
-        vsymbol.push_back("frxEURCAD");
-        vsymbol.push_back("frxEURCHF");
-        vsymbol.push_back("frxEURGBP");
-        vsymbol.push_back("frxEURJPY");
-        vsymbol.push_back("frxEURNZD");
-        vsymbol.push_back("frxEURUSD");
-
-        vsymbol.push_back("frxGBPAUD");
-        vsymbol.push_back("frxGBPCAD");
-        vsymbol.push_back("frxGBPCHF");
-        vsymbol.push_back("frxGBPJPY");
-
-        ///vsymbol.push_back("frxGBPNOK");
-        vsymbol.push_back("frxGBPNZD");
-        ///vsymbol.push_back("frxGBPPLN");
-        ///vsymbol.push_back("frxGBPUSD");
-
-        ///vsymbol.push_back("frxNZDJPY");
-        vsymbol.push_back("frxNZDUSD");
-
-        vsymbol.push_back("frxUSDCAD");
-        ///vsymbol.push_back("frxUSDCHF");
-        vsymbol.push_back("frxUSDJPY");
-        ///vsymbol.push_back("frxUSDNOK");
-        ///vsymbol.push_back("frxUSDPLN");
-        ///vsymbol.push_back("frxUSDSEK");
-        return vsymbol;
-}
-
-std::string format(const char *fmt, ...)
-{
-        va_list args;
-        va_start(args, fmt);
-        std::vector<char> v(1024);
-        while (true)
-        {
-                va_list args2;
-                va_copy(args2, args);
-                int res = vsnprintf(v.data(), v.size(), fmt, args2);
-                if ((res >= 0) && (res < static_cast<int>(v.size())))
-                {
-                    va_end(args);
-                    va_end(args2);
-                    return std::string(v.data());
-                }
-                size_t size;
-                if (res < 0)
-                    size = v.size() * 2;
-                else
-                    size = static_cast<size_t>(res) + 1;
-                v.clear();
-                v.resize(size);
-                va_end(args2);
-        }
 }
 
 void save_json(std::string file_name, json &j) {
