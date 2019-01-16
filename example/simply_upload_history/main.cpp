@@ -2,7 +2,7 @@
 #include "BinaryApiEasy.hpp"
 #include "ZstdEasy.hpp"
 
-#define BUILD_VER 1.1
+#define BUILD_VER 1.2
 
 using json = nlohmann::json;
 
@@ -55,8 +55,9 @@ int main() {
         // запустим загрузку котировок в несколько потоков
         int num_threads = std::thread::hardware_concurrency();
         std::cout << "hardware concurrency: " << num_threads << std::endl;
+        std::vector<std::thread> threads(num_threads);
         for(int t = 0; t < num_threads; ++t) {
-                std::thread download_thread([&, disk_name, path, folder_path_quotes_bars, folder_path_quotes_ticks, servertime, symbols, t, num_threads]() {
+                threads[t] = std::thread([&, disk_name, path, folder_path_quotes_bars, folder_path_quotes_ticks, servertime, symbols, t, num_threads]() {
                         BinaryAPI iBinaryApiForQuotes;
                         iBinaryApiForQuotes.set_use_log(true);
                         for(size_t s = t; s < symbols.size(); s += num_threads) {
@@ -86,10 +87,10 @@ int main() {
                                         user_function_quotes_bars);
                         } // for s
                 });
-                download_thread.detach();
+                //download_thread.detach();
         } // for t
-        while(true) {
-
+        for(int t = 0; t < num_threads; ++t) {
+                threads[t].join();
         }
         std::cout << "The program has completed" << std::endl;
         std::cin;
