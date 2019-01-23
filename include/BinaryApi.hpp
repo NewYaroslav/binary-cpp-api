@@ -694,7 +694,9 @@ public:
 
                 std::thread client_thread([&]() {
                         while(true) {
+                                std::cout << "BinaryApi: start" << std::endl;
                                 client_.start();
+                                std::cout << "BinaryApi: restart" << std::endl;
                                 is_stream_quotations_ = false;
                                 is_stream_proposal_ = false;
                                 is_open_connection_ = false;
@@ -724,6 +726,9 @@ public:
                                                 //std::cout << "BinaryApi: send " <<
                                                 //        message << std::endl;
                                                 connection_mutex_.lock();
+                                                while(!is_open_connection_) {
+                                                    std::this_thread::yield();
+                                                }
                                                 save_connection_->send(message);
                                                 connection_mutex_.unlock();
                                                 /* проверим ограничение запросов в минуту
