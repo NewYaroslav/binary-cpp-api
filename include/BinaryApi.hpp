@@ -695,7 +695,15 @@ public:
                 std::thread client_thread([&]() {
                         while(true) {
                                 std::cout << "BinaryApi: start" << std::endl;
-                                client_.start();
+                                try {
+                                    client_.start();
+                                }
+                                catch(std::exception e) {
+                                    write_log_file("BinaryApi: Error, error message: " + std::string(e.what()));
+                                }
+                                catch(...) {
+                                    write_log_file("BinaryApi: Error, error");
+                                }
                                 std::cout << "BinaryApi: restart" << std::endl;
                                 is_stream_quotations_ = false;
                                 is_stream_proposal_ = false;
@@ -725,10 +733,10 @@ public:
                                                 send_queue_mutex_.unlock();
                                                 //std::cout << "BinaryApi: send " <<
                                                 //        message << std::endl;
-                                                connection_mutex_.lock();
                                                 while(!is_open_connection_) {
                                                     std::this_thread::yield();
                                                 }
+                                                connection_mutex_.lock();
                                                 save_connection_->send(message);
                                                 connection_mutex_.unlock();
                                                 /* проверим ограничение запросов в минуту
@@ -957,7 +965,6 @@ public:
                         times.resize(j_times.size());
                         for(size_t i = 0; i < prices.size(); i++) {
                                 prices[i] = atof((j_prices[i].get<std::string>()).c_str());
-                                //std::string timestr = j_times[i].dump();
                                 times[i] = atoi((j_times[i].get<std::string>()).c_str()); //atoi(timestr.c_str());
                         }
                         array_ticks_mutex_.unlock();

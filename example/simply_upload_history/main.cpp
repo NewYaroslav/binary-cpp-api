@@ -2,7 +2,7 @@
 #include "BinaryApiEasy.hpp"
 #include "ZstdEasy.hpp"
 
-#define BUILD_VER 1.2
+#define BUILD_VER 1.3
 
 using json = nlohmann::json;
 
@@ -90,7 +90,15 @@ int main() {
                 //download_thread.detach();
         } // for t
         for(int t = 0; t < num_threads; ++t) {
+            try {
                 threads[t].join();
+            }
+            catch(std::exception e) {
+                std::cout << "error " << t << " thread, msg: " << e.what() << std::endl;
+            }
+            catch(...) {
+                std::cout << "error " << t << " thread" << std::endl;
+            }
         }
         std::cout << "The program has completed" << std::endl;
         std::cin;
