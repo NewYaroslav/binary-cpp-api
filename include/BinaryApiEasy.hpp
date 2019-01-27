@@ -390,7 +390,7 @@ namespace BinaryApiEasy
          * \param end_timestamp последняя дата, встречающееся среди файлов
          * \return вернет 0 в случае успеха
          */
-        int get_beg_end_timestamp(
+        int get_beg_end_timestamp_for_path(
                 std::string path,
                 std::string file_extension,
                 unsigned long long &beg_timestamp,
@@ -398,6 +398,41 @@ namespace BinaryApiEasy
                 std::vector<std::string> file_list;
                 bf::get_list_files(path, file_list, true);
                 return get_beg_end_timestamp(file_list, file_extension, beg_timestamp, end_timestamp);
+        }
+//------------------------------------------------------------------------------
+        /** \brief Найти первую и последнюю дату файлов в нескольких директориях
+         * \param paths список директорий с файлами исторических данных
+         * \param file_extension расширение файла (например .hex или .zstd)
+         * \param beg_timestamp первая дата, встречающееся среди файлов
+         * \param end_timestamp последняя дата, встречающееся среди файлов
+         * \return вернет 0 в случае успеха
+         */
+        int get_beg_end_timestamp_for_paths(
+                std::vector<std::string> paths,
+                std::string file_extension,
+                unsigned long long &beg_timestamp,
+                unsigned long long &end_timestamp) {
+                bool is_init = false;
+                beg_timestamp = std::numeric_limits<unsigned long long>::min();
+                end_timestamp = std::numeric_limits<unsigned long long>::max();
+                for(size_t i = 0; i < paths.size(); ++i) {
+                    std::vector<std::string> file_list;
+                    bf::get_list_files(paths[i], file_list, true);
+                    unsigned long long _beg_timestamp;
+                    unsigned long long _end_timestamp;
+                    int err = get_beg_end_timestamp(file_list, file_extension, _beg_timestamp, _end_timestamp);
+                    if(err == OK) {
+                        if(beg_timestamp < _beg_timestamp) {
+                            beg_timestamp = _beg_timestamp;
+                        }
+                        if(end_timestamp > _end_timestamp) {
+                            end_timestamp = _end_timestamp;
+                        }
+                    }
+                }
+                if(!is_init)
+                    return UNKNOWN_ERROR;
+                return OK;
         }
 //------------------------------------------------------------------------------
 }

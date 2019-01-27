@@ -46,12 +46,11 @@ namespace ZstdEasy
                 NOT_DECOMPRESS_FILE = -12,
                 DATA_SIZE_ERROR = -13,
         };
-
+//------------------------------------------------------------------------------
         enum QuotesType {
                 QUOTES_TICKS = 0,
                 QUOTES_BARS = 1,
         };
-
 //------------------------------------------------------------------------------
         /** \brief Тренируйте словарь из массива образцов
         * \param path путь к файлам
@@ -100,6 +99,7 @@ namespace ZstdEasy
                 void *dict_buffer = NULL;
                 //size_t dict_buffer_capacit = 1024*100;
                 dict_buffer = malloc(dict_buffer_capacit);
+                memset(dict_buffer, 0, dict_buffer_capacit);
                 size_t file_size = ZDICT_trainFromBuffer(dict_buffer, dict_buffer_capacit, samples_buffer, samples_size, num_files);
                 size_t err = bf::write_file(file_name, dict_buffer, file_size);
                 return err > 0 ? OK : NOT_WRITE_FILE;
@@ -127,9 +127,11 @@ namespace ZstdEasy
 
                 void *input_file_buffer = NULL;
                 input_file_buffer = malloc(input_file_size);
+                memset(input_file_buffer, 0, input_file_size);
 
                 void *dictionary_file_buffer = NULL;
                 dictionary_file_buffer = malloc(dictionary_file_size);
+                memset(dictionary_file_buffer, 0, dictionary_file_size);
 
                 bf::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
                 bf::load_file(input_file, input_file_buffer, input_file_size);
@@ -137,6 +139,7 @@ namespace ZstdEasy
                 size_t compress_file_size = ZSTD_compressBound(input_file_size);
                 void *compress_file_buffer = NULL;
                 compress_file_buffer = malloc(compress_file_size);
+                memset(compress_file_buffer, 0, compress_file_size);
 
                 ZSTD_CCtx* const cctx = ZSTD_createCCtx();
                 size_t compress_size = ZSTD_compress_usingDict(
@@ -188,12 +191,14 @@ namespace ZstdEasy
 
                 void *dictionary_file_buffer = NULL;
                 dictionary_file_buffer = malloc(dictionary_file_size);
+                memset(dictionary_file_buffer, 0, dictionary_file_size);
 
                 bf::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
 
                 size_t compress_file_size = ZSTD_compressBound(buffer_size);
                 void *compress_file_buffer = NULL;
                 compress_file_buffer = malloc(compress_file_size);
+                memset(compress_file_buffer, 0, compress_file_size);
 
                 ZSTD_CCtx* const cctx = ZSTD_createCCtx();
                 size_t compress_size = ZSTD_compress_usingDict(
@@ -244,6 +249,7 @@ namespace ZstdEasy
                         times.size() * sizeof(unsigned long long);
                 void *buffer = NULL;
                 buffer = malloc(buffer_size);
+                memset(buffer, 0, buffer_size);
                 size_t buffer_offset = 0;
                 unsigned long data_size = times.size();
                 std::memcpy((unsigned char*)buffer + buffer_offset, &data_size, sizeof(data_size));
@@ -279,9 +285,11 @@ namespace ZstdEasy
 
                 void *input_file_buffer = NULL;
                 input_file_buffer = malloc(input_file_size);
+                memset(input_file_buffer, 0, input_file_size);
 
                 void *dictionary_file_buffer = NULL;
                 dictionary_file_buffer = malloc(dictionary_file_size);
+                memset(dictionary_file_buffer, 0, dictionary_file_size);
 
                 bf::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
                 bf::load_file(input_file, input_file_buffer, input_file_size);
@@ -301,6 +309,7 @@ namespace ZstdEasy
                 }
                 void *decompress_file_buffer = NULL;
                 decompress_file_buffer = malloc(decompress_file_size);
+                memset(decompress_file_buffer, 0, decompress_file_size);
 
                 ZSTD_DCtx* const dctx = ZSTD_createDCtx();
                 size_t const decompress_size = ZSTD_decompress_usingDict(
@@ -352,9 +361,11 @@ namespace ZstdEasy
 
                 void *input_file_buffer = NULL;
                 input_file_buffer = malloc(input_file_size);
+                memset(input_file_buffer, 0, input_file_size);
 
                 void *dictionary_file_buffer = NULL;
                 dictionary_file_buffer = malloc(dictionary_file_size);
+                memset(dictionary_file_buffer, 0, dictionary_file_size);
 
                 bf::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
                 bf::load_file(file_name, input_file_buffer, input_file_size);
@@ -374,6 +385,7 @@ namespace ZstdEasy
                 }
 
                 buffer = malloc(decompress_file_size);
+                memset(buffer,0,decompress_file_size); // решает проблему битой послденей временной метки
 
                 ZSTD_DCtx* const dctx = ZSTD_createDCtx();
                 size_t const decompress_size = ZSTD_decompress_usingDict(

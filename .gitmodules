@@ -22,3 +22,6 @@
 [submodule "lib/nana"]
 	path = lib/nana
 	url = https://github.com/cnjinhao/nana.git
+[submodule "lib/xwave"]
+	path = lib/xwave
+	url = https://github.com/NewYaroslav/xwave.git
