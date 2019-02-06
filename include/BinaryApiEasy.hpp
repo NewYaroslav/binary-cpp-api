@@ -146,7 +146,6 @@ namespace BinaryApiEasy
                                       std::vector<double> &prices,
                                       std::vector<unsigned long long> &times)
         {
-                // сохраняем
                 std::ofstream file(file_name, std::ios_base::binary);
                 unsigned long data_size = times.size();
                 file.write(reinterpret_cast<char *>(&data_size),sizeof (data_size));
@@ -166,7 +165,6 @@ namespace BinaryApiEasy
                                     std::vector<double> &prices,
                                     std::vector<unsigned long long> &times)
         {
-                // сохраняем
                 std::ifstream file(file_name, std::ios_base::binary);
                 if(!file)
                         return FILE_CANNOT_OPENED;

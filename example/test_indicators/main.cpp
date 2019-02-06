@@ -4,13 +4,13 @@
 #include "HistoricalDataEasy.hpp"
 
 int main() {
-        std::string path = "..//..//train_2//quotes_bars_data//frxAUDCAD";
+        std::string path = "..//..//train_2//quotes_bars_data//frxEURGBP";
         HistoricalDataEasy::HistoricalData hist(path);
         hist.read_all_data();
 
         int PERIOD_MA = 10;
         int PERIOD_MW = 10;
-        int PERIOD_RSI = 10;
+        int PERIOD_RSI = 5;
         int PERIOD_BB = 20;
         double STD_DEV_BB = 2;
         IndicatorsEasy::WMA<double> wma(PERIOD_MA);
@@ -19,6 +19,10 @@ int main() {
         IndicatorsEasy::MW<double> mw(PERIOD_MW);
         IndicatorsEasy::RSI<double, IndicatorsEasy::EMA<double>> rsi(PERIOD_RSI);
         IndicatorsEasy::BollingerBands<double> bb(PERIOD_BB, STD_DEV_BB);
+        IndicatorsEasy::DetectorWaveform<double> dw(100);
+        /*
+                30, 240, 0.6
+        */
         const int CANDLE_SIZE = 60;
 
         int status = 0;
@@ -26,7 +30,7 @@ int main() {
                 double price = 0;
                 unsigned long long timestamp = 0;
                 hist.get_price(price, timestamp, status, CANDLE_SIZE);
-                std::cout << "price: " << price << std::endl;
+                //std::cout << "price: " << price << std::endl;
                 if(status == hist.SKIPPING_DATA) {
                         wma.clear();
                         sma.clear();
@@ -34,9 +38,40 @@ int main() {
                         mw.clear();
                         rsi.clear();
                         bb.clear();
+                        dw.clear();
                 }
                 if(status == hist.NORMAL_DATA) {
                         double wma_out, sma_out, ema_out, rsi_out, bb_tl, bb_ml, bb_bl;
+                        double dw_out;
+                        if(rsi.update(price, rsi_out) ==  hist.OK) {
+                                //std::cout << "rsi: " << rsi_out << std::endl;
+                        }
+                        if(dw.update(price, dw_out, 20) == hist.OK) {
+                                //std::cout << "dw: " << dw_out << std::endl;
+                                if(abs(rsi_out) > 80)
+                                if(abs(dw_out) > 0.8) {
+                                        int state = 0;
+                                        if(dw_out > 0) {
+                                                hist.check_binary_option(state, hist.SELL, 180, timestamp);
+                                        } else
+                                        if(dw_out < 0) {
+                                                hist.check_binary_option(state, hist.BUY, 180, timestamp);
+                                        }
+                                        static int num_sum  = 0;
+                                        static double sum = 0;
+                                        if(state == 1) {
+                                                sum += 1.0;
+                                        }
+                                        num_sum++;
+                                        std::cout << "eff " << (sum / (double)num_sum) << std::endl;
+                                        std::cout << num_sum << std::endl;
+                                        std::cout << xtime::get_str_unix_date_time(timestamp) << std::endl;
+                                        //int zz;
+                                        //std::cin >> zz;
+                                        //std::cout << zz << std::endl;
+                                }
+                        }
+#                       if (0)
                         if(wma.update(price, wma_out) == hist.OK) {
                                 std::cout << "wma: " << wma_out << std::endl;
                         }
@@ -83,8 +118,9 @@ int main() {
                                 std::cout << "mw min: " << temp << std::endl;
                                 std::cout << std::endl;
                         }
+#                       endif
                 }
-                std::cout << std::endl;
+                //std::cout << std::endl;
         }
         return 0;
 }

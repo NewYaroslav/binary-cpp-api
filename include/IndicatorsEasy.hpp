@@ -795,6 +795,146 @@ namespace IndicatorsEasy
                 }
         };
 //------------------------------------------------------------------------------
+        /** \brief Средняя скорость
+         */
+        template <typename T>
+        class AverageSpeed
+        {
+        private:
+                MW<T> iMW;
+        public:
+                /** \brief Инициализировать класс индикатора
+                 * \param period период индикатора
+                 */
+                AverageSpeed(int period) : iMW(period + 1)
+                {
+
+                }
+
+                /** \brief Обновить состояние индикатора
+                 * \param in Цена
+                 * \param out Значение индикатора
+                 * \return вернет 0 в случае успеха
+                 */
+                int update(T in, T &out)
+                {
+                        std::vector<T> mw_out;
+                        int err = iMW.update(in, mw_out);
+                        if(err == OK) {
+                                std::vector<T> mw_diff;
+                                NormalizationEasy::calculate_difference(mw_out, mw_diff);
+                                T sum = std::accumulate(mw_diff.begin(), mw_diff.end(), T(0));
+                                out = sum /(T)mw_diff.size();
+                                return OK;
+                        }
+                        return err;
+                }
+
+                /** \brief Протестировать индикатор
+                 * \param in Цена
+                 * \param out Значение индикатора
+                 * \return вернет 0 в случае успеха
+                 */
+                int test(T in, T &out)
+                {
+                        std::vector<T> mw_out;
+                        int err = iMW.test(in, mw_out);
+                        if(err == OK) {
+                                std::vector<T> mw_diff;
+                                NormalizationEasy::calculate_difference(mw_out, mw_diff);
+                                T sum = std::accumulate(mw_diff.begin(), mw_diff.end(), T(0));
+                                out = sum /(T)mw_diff.size();
+                                return OK;
+                        }
+                        return err;
+                }
+
+                /** \brief Очистить состояние индикатора
+                 */
+                void clear()
+                {
+                        iMW.clear();
+                }
+        };
+//------------------------------------------------------------------------------
+        template <typename T>
+        class DetectorWaveform
+        {
+        private:
+                MW<T> iMW;
+                const int MIN_WAVEFORM_LEN = 3;
+                T coeff_exp = 3.141592;
+                std::vector<std::vector<T>> exp_data_up_;
+                std::vector<std::vector<T>> exp_data_dn_;
+
+                void init_exp_data_up(std::vector<T> &data)
+                {
+                        T dt = 1.0/(T)data.size();
+                        for(size_t i = 0; i < data.size(); ++i) {
+                                data[i] = exp(coeff_exp*(T)i*dt);
+                        }
+                        NormalizationEasy::calculate_min_max(data, data, NormalizationEasy::MINMAX_0_1);
+                }
+
+                void init_exp_data_dn(std::vector<T> &data)
+                {
+                        T dt = 1.0/(T)data.size();
+                        for(size_t i = 0; i < data.size(); ++i) {
+                                data[i] = -exp(coeff_exp*(T)i*dt);
+                        }
+                        NormalizationEasy::calculate_min_max(data, data, NormalizationEasy::MINMAX_0_1);
+                }
+        public:
+                /** \brief Инициализировать класс
+                 * \param max_len максимальная длина файла
+                 */
+                DetectorWaveform(int max_len) : iMW(max_len)
+                {
+                        if(max_len < MIN_WAVEFORM_LEN)
+                                return;
+                        size_t max_num_exp_data = max_len - MIN_WAVEFORM_LEN + 1;
+                        exp_data_up_.resize(max_num_exp_data);
+                        exp_data_dn_.resize(max_num_exp_data);
+                        for(int l = MIN_WAVEFORM_LEN; l <= max_len; ++l) {
+                                exp_data_up_[l-MIN_WAVEFORM_LEN].resize(l);
+                                exp_data_dn_[l-MIN_WAVEFORM_LEN].resize(l);
+                                init_exp_data_up(exp_data_up_[l-MIN_WAVEFORM_LEN]);
+                                init_exp_data_dn(exp_data_dn_[l-MIN_WAVEFORM_LEN]);
+                        }
+                }
+
+                int update(T in, T &out, int len_waveform)
+                {
+                        std::vector<T> mw_out;
+                        int err = iMW.update(in, mw_out);
+                        if(err == OK) {
+                                if((int)mw_out.size() >= MIN_WAVEFORM_LEN && len_waveform <= (int)mw_out.size()) {
+                                        std::vector<T> fragment_data;
+                                        fragment_data.insert(fragment_data.begin(), mw_out.begin() + mw_out.size() - len_waveform, mw_out.end());
+                                        int err_n = NormalizationEasy::calculate_min_max(fragment_data, fragment_data, NormalizationEasy::MINMAX_0_1);
+                                        if(err_n != OK) return err_n;
+                                        T coeff_up = 0, coeff_dn = 0;
+                                        int err_up = CorrelationEasy::calculate_spearman_rank_correlation_coefficient(fragment_data, exp_data_up_[len_waveform-MIN_WAVEFORM_LEN], coeff_up);
+                                        int err_dn = CorrelationEasy::calculate_spearman_rank_correlation_coefficient(fragment_data, exp_data_dn_[len_waveform-MIN_WAVEFORM_LEN], coeff_dn);
+                                        if(err_up != OK) return err_up;
+                                        if(err_dn != OK) return err_dn;
+                                        if(abs(coeff_up) > abs(coeff_dn)) {
+                                                out = coeff_up;
+                                        } else {
+                                                out = coeff_dn;
+                                        }
+                                        return OK;
+                                }
+                        }
+                        return err;
+                }
+
+                void clear()
+                {
+                     iMW.clear();
+                }
+        };
+//------------------------------------------------------------------------------
         /** \brief Класс для подсчета коррлеяции между валютными парами
          */
         template <typename T>

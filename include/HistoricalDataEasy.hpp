@@ -410,9 +410,9 @@ namespace HistoricalDataEasy
                 };
 //------------------------------------------------------------------------------
                 /** \brief Инициализировать класс
-                * \param paths директории с файлами исторических данных
-                * \param dictionary_file файл словаря (если указано "", то считываются несжатые файлы)
-                */
+                 * \param paths директории с файлами исторических данных
+                 * \param dictionary_file файл словаря (если указано "", то считываются несжатые файлы)
+                 */
                 HistoricalDataMultipleCurrencies(std::vector<std::string> paths, std::string dictionary_file = "")
                 {
                         for(size_t i = 0; i < paths.size(); ++i) {
@@ -426,10 +426,10 @@ namespace HistoricalDataEasy
                 }
 //------------------------------------------------------------------------------
                 /** \brief Найти первую и последнюю дату файлов
-                * \param beg_timestamp первая дата, встречающееся среди файлов
-                * \param end_timestamp последняя дата, встречающееся среди файлов
-                * \return вернет 0 в случае успеха
-                */
+                 * \param beg_timestamp первая дата, встречающееся среди файлов
+                 * \param end_timestamp последняя дата, встречающееся среди файлов
+                 * \return вернет 0 в случае успеха
+                 */
                 inline int get_beg_end_timestamp(unsigned long long &_beg_timestamp, unsigned long long &_end_timestamp)
                 {
                         beg_timestamp = _beg_timestamp;
@@ -441,13 +441,13 @@ namespace HistoricalDataEasy
                 }
 //------------------------------------------------------------------------------
                 /** \brief Получить данные цен тиков или цен закрытия свечей
-                * Внимание! Для цен закрытия свечей указывается временная метка НАЧАЛА свечи
-                * \param array_prices массив массивов цен тиков или цен закрытия свечей
-                * \param data_size количество данных для записи в массивы массива array_prices
-                * \param step шаг времени
-                * \param timestamp временная метка
-                * \return состояние огибки, 0 если все в порядке
-                */
+                 * Внимание! Для цен закрытия свечей указывается временная метка НАЧАЛА свечи
+                 * \param array_prices массив массивов цен тиков или цен закрытия свечей
+                 * \param data_size количество данных для записи в массивы массива array_prices
+                 * \param step шаг времени
+                 * \param timestamp временная метка
+                 * \return состояние огибки, 0 если все в порядке
+                 */
                 int get_data(std::vector<std::vector<double>>& array_prices, int data_size, int step, unsigned long long timestamp)
                 {
                         if(!is_init) {
@@ -464,10 +464,10 @@ namespace HistoricalDataEasy
                 }
 //------------------------------------------------------------------------------
                 /** \brief Получить массив цен со всех валютных пар
-                * \param prices массив цен со всех валютных пар за данную веремнную метку
-                * \param timestamp временная метка
-                * \return вернет 0 в случае успеха
-                */
+                 * \param prices массив цен со всех валютных пар за данную веремнную метку
+                 * \param timestamp временная метка
+                 * \return вернет 0 в случае успеха
+                 */
                 int get_data(std::vector<double> &prices, unsigned long long timestamp)
                 {
                         if(!is_init) {
@@ -484,18 +484,18 @@ namespace HistoricalDataEasy
                 }
 //------------------------------------------------------------------------------
                 /** \brief Проверить бинарный опцион
-                * \param state состояние бинарного опциона (уданая сделка WIN = 1, убыточная LOSS = -1 и нейтральная 0)
-                * \param contract_type тип контракта (см. ContractType, доступно BUY и SELL)
-                * \param duration_sec длительность опциона в секундах
-                * \param timestamp временная метка начала опциона
-                * \param indx позиция валютной пары в массиве валютных пар (должно совпадать с позицией массива path)
-                * \return состояние ошибки (0 в случае успеха)
-                */
+                 * \param state состояние бинарного опциона (уданая сделка WIN = 1, убыточная LOSS = -1 и нейтральная 0)
+                 * \param contract_type тип контракта (см. ContractType, доступно BUY и SELL)
+                 * \param duration_sec длительность опциона в секундах
+                 * \param timestamp временная метка начала опциона
+                 * \param indx позиция валютной пары в массиве валютных пар (должно совпадать с позицией массива path)
+                 * \return состояние ошибки (0 в случае успеха)
+                 */
                 int check_binary_option(int& state, int contract_type, int duration_sec, unsigned long long timestamp, int indx) {
                         if(!is_init) {
                                 return NO_INIT;
                         }
-                        if(indx >= datas.size()) {
+                        if(indx >= (int)datas.size()) {
                                 return INVALID_PARAMETER;
                         }
                         return datas[indx].check_binary_option(state, contract_type, duration_sec, timestamp);

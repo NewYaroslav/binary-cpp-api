@@ -120,6 +120,7 @@ namespace NormalizationEasy
                 return OK;
         }
 //------------------------------------------------------------------------------
+#if(0)
         /** \brief Максимизировать амплитуду
          * \param in входные данные
          * \param out получившееся данные
@@ -127,7 +128,7 @@ namespace NormalizationEasy
          * \return вернет 0 в случае успеха
          */
         template<class T1, class T2, class T3>
-        int calculate_max_amplitude(std::vector<T1>& in, std::vector<T2>& out, std::vector<T3>& norm) {
+        int maximize_amplitudes(std::vector<T1>& in, std::vector<T2>& out, std::vector<T3>& norm) {
                 if(in.size() != norm.size() || in.size() == 0) {
                         out.clear();
                         return INVALID_PARAMETER;
@@ -137,6 +138,32 @@ namespace NormalizationEasy
                 out.resize(in.size());
                 for(size_t i = 0; i < in.size(); i++) {
                         out[i] = in[i] > 0 ? (in[i] / max_data) : (in[i] < 0 ? (in[i] / -min_data) : 0.0);
+                }
+                return OK;
+        }
+#endif
+//------------------------------------------------------------------------------
+        /** \brief Нормализовать амплитуду
+         * \param in входные данные
+         * \param out получившееся данные
+         * \param max_amplitude максимальная амплитуда
+         * \return вернет 0 в случае успеха
+         */
+        template<class T1, class T2, class T3>
+        int normalize_amplitudes(std::vector<T1>& in, std::vector<T2>& out, T3 max_amplitude) {
+                if(in.size() == 0) {
+                        out.clear();
+                        return INVALID_PARAMETER;
+                }
+                out.resize(in.size());
+                T1 max_data = *std::max_element(in.begin(), in.end());
+                T1 min_data = *std::min_element(in.begin(), in.end());
+                T1 max_data_ampl = std::max(abs(min_data),abs(max_data));
+                if(max_data_ampl == 0)
+                       return OK;
+                T3 coeff = max_amplitude/max_data_ampl;
+                for(size_t i = 0; i < in.size(); i++) {
+                        out[i] = coeff * in[i];
                 }
                 return OK;
         }

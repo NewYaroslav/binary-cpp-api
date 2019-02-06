@@ -25,3 +25,9 @@
 [submodule "lib/xwave"]
 	path = lib/xwave
 	url = https://github.com/NewYaroslav/xwave.git
+[submodule "lib/imgui"]
+	path = lib/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "lib/imgui-sfml"]
+	path = lib/imgui-sfml
+	url = https://github.com/eliasdaler/imgui-sfml.git

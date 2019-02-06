@@ -5,7 +5,8 @@
 #include "WavEasy.hpp"
 
 int main() {
-        std::string path = "..//..//..//binary_historical_data//quotes_bars_data//R_25";
+        std::string name = "frxEURCHF";
+        std::string path = "..//..//..//binary_historical_data//quotes_bars_data//" + name;
         HistoricalDataEasy::HistoricalData hist(path, "quotes_bars.zstd");
         hist.read_all_data();
         std::vector<double> norm_prices;
@@ -17,15 +18,21 @@ int main() {
         std::cout << "prices size: " << prices.size() << std::endl;
         std::vector<unsigned long long> times = hist.get_array_times();
         NormalizationEasy::calculate_difference(prices, norm_prices);
-        NormalizationEasy::calculate_min_max(norm_prices, norm_prices, NormalizationEasy::MINMAX_1_1);
+        NormalizationEasy::normalize_amplitudes(norm_prices, norm_prices, 1.0);
         if(norm_prices.size() == 0) {
                 std::cout << "error!" << std::endl;
                 return 0;
         }
         std::cout << "save sounds" << std::endl;
-        std::cout << "date beg: " << xtime::get_str_unix_date_time(times[0]) << std::endl;
-        std::cout << "date end: " << xtime::get_str_unix_date_time(times.back()) << std::endl;
-        WavEasy::SoundRecording wav("test");
+        xtime::DateTime startTime(times[0]);
+        xtime::DateTime stopTime(times.back());
+
+
+        std::cout << "date beg: " << startTime.get_str_date_time() << std::endl;
+        std::cout << "date end: " << stopTime.get_str_date_time() << std::endl;
+        std::string wav_file_name = name + "_" + std::to_string(startTime.day) + "_" + std::to_string(startTime.month) + "_" + std::to_string(startTime.year) +
+                "_TO_" + std::to_string(stopTime.day) + "_" + std::to_string(stopTime.month) + "_" + std::to_string(stopTime.year);
+        WavEasy::SoundRecording wav(wav_file_name,16000);
         for(size_t i = 0; i < norm_prices.size(); ++i) {
                 wav.update(norm_prices[i]);
         }
