@@ -10,14 +10,17 @@
 
 ### Как пользоваться?
 
-Чтобы начать использовать BinaryAPI в своей программе, необходимо после подключения всех зависимостей в проект просто добавить заголовочный файл *BinaryAPI.hpp*. Также для использования дополнительных возможностей, упрощающих использование API, можно добавить в проект файлы *BinaryApiEasy.hpp* и *ZstdEasy.hpp*.
+Чтобы начать использовать BinaryAPI в своей программе, необходимо после подключения всех зависимостей в проект просто добавить заголовочный файл *BinaryAPI.hpp*. Также для использования дополнительных возможностей, упрощающих использование API, можно добавить в проект файлы с окончанием *Easy.hpp* 
 
+Файл *BinaryAPI.hpp* содержит класс для взаимодействия с брокером Binary
 Файл *BinaryApiEasy.hpp* содержит функции для загрузки, записи, чтения файлов котировок.
 Файл *ZstdEasy.hpp* позволяет легко использовать библиотеку *zstd* для сжатия и декомпресии файлов котировок.
 Файл *CorrelationEasy.hpp* содержит функции для определения корреляции
 Файл *IndicatorsEasy.hpp* содержит индикаторы технического анализа
 Файл *HistoricalDataEasy.hpp* содержит класс для удобного использования исторических данных
 Файл *NormalizationEasy.hpp* содержит функции для нормализации данных
+Файл *BinaryOptionsEasy.hpp* содержит функции и классы для проведения тестов стратегий (имитация торговли)
+Файл *WavEasy.hpp* позволяет преобразовать котировки в звук
 
 ### Пример программы
 
@@ -312,14 +315,14 @@ apiBinary.get_ticks_without_limits("frxEURUSD", prices, times, t1, t2)
 
 // варианты ошибок API
 enum ErrorType {
-	OK = 0, // процесс завершился удачно
-	NO_AUTHORIZATION = -1, // нет авторизации
-	NO_COMMAND = -2, // не было команды перед использованием метода
-	UNKNOWN_ERROR = -3, // неизвестная ошибка
-	NO_INIT = -4, // не было инициализации перед использованием метода
-	NO_OPEN_CONNECTION = -5, // нет соединения с сервером
-	INVALID_PARAMETER = -6, // какой-то параметр указали неверно
-	DATA_NOT_AVAILABLE = -7, // нет данных, надо жэ...
+	OK = 0, 					// процесс завершился удачно
+	NO_AUTHORIZATION = -1, 		// нет авторизации
+	NO_COMMAND = -2, 			// не было команды перед использованием метода
+	UNKNOWN_ERROR = -3, 		// неизвестная ошибка
+	NO_INIT = -4, 				// не было инициализации перед использованием метода
+	NO_OPEN_CONNECTION = -5, 	// нет соединения с сервером
+	INVALID_PARAMETER = -6, 	// какой-то параметр указали неверно
+	DATA_NOT_AVAILABLE = -7, 	// нет данных, надо жэ...
 };
 
 ```
@@ -519,18 +522,26 @@ int download_and_save_all_data_with_compression(
 ```
 
 На данный момент данные по процентам выплат будут храниться в репозитории [https://github.com/NewYaroslav/binary_historical_data](https://github.com/NewYaroslav/binary_historical_data). 
-Данные репозитория будут обновляться раз в день (приблизительно в 00:00 GMT)
+
+Программа *martingale_does_not_work.exe* позволяет сравнить разные варианты мани менеджмента и прийти к выводу, что мартингейл не работает.
+
+![martingale_does_not_work_2](doc/martingale_does_not_work_2.png)
+
 
 ### Зависимости
 
 *binary-cpp-api* зависит от следующих внешних библиотек / пакетов
 
-* *Simple-WebSocket-Server* - [https://gitlab.com/eidheim/Simple-WebSocket-Server](https://gitlab.com/eidheim/Simple-WebSocket-Server)
-* *Boost.Asio* или автономный *Asio* - [http://think-async.com/Asio](http://think-async.com/Asio)
-* *Библиотека OpenSSL* - [http://slproweb.com/products/Win32OpenSSL.html](http://slproweb.com/products/Win32OpenSSL.html)
-* *Библиотека JSON* - [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
-* *Библиотека zstd* - [https://github.com/facebook/zstd](https://github.com/facebook/zstd)
-* *Библиотека xtime* - [https://github.com/NewYaroslav/xtime_cpp.git](https://github.com/NewYaroslav/xtime_cpp.git)
+* *Simple-WebSocket-Server (необходимо для BinaryApi)* - [https://gitlab.com/eidheim/Simple-WebSocket-Server](https://gitlab.com/eidheim/Simple-WebSocket-Server)
+* *Boost.Asio* или автономный *Asio (необходимо для BinaryApi)* - [http://think-async.com/Asio](http://think-async.com/Asio)
+* *Библиотека OpenSSL (необходимо для BinaryApi)* - [http://slproweb.com/products/Win32OpenSSL.html](http://slproweb.com/products/Win32OpenSSL.html)
+* *Библиотека JSON (необходимо для BinaryApi)* - [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+* *Библиотека zstd (для работы с сжатыми файлами)* - [https://github.com/facebook/zstd](https://github.com/facebook/zstd)
+* *Библиотека xtime (необходимо для BinaryApi и для работы с файлами)* - [https://github.com/NewYaroslav/xtime_cpp.git](https://github.com/NewYaroslav/xtime_cpp.git)
+* *Библиотека banana-filesystem-cpp (для работы с файлами)* - [https://github.com/NewYaroslav/banana-filesystem-cpp](https://github.com/NewYaroslav/banana-filesystem-cpp)
+* *Библиотека imgui (для программы martingale_does_not_work)* - [https://github.com/ocornut/imgui](https://github.com/ocornut/imgui)
+* *Библиотека imgui-sfml (для программы martingale_does_not_work)* - [https://github.com/eliasdaler/imgui-sfml](https://github.com/eliasdaler/imgui-sfml)
+* *Библиотека SFML (для программы martingale_does_not_work)* - [https://www.sfml-dev.org/](https://www.sfml-dev.org/)
 * *gcc* или *mingw* с поддержкой C++11, например - [https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/7.3.0/threads-posix/seh/x86_64-7.3.0-release-posix-seh-rt_v5-rev0.7z/download](https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/7.3.0/threads-posix/seh/x86_64-7.3.0-release-posix-seh-rt_v5-rev0.7z/download)
 
 Все необходимые библиотеки добавлены, как субмодули, в папку lib. 

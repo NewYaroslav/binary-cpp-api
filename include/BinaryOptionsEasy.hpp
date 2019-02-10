@@ -62,7 +62,7 @@ namespace BinaryOptionsEasy
          * \param loss потери в случае поражения (обычно всегда 1.0)
          * \return математическое ожидание прибыли
          */
-        double calc_expected_value(double eff, double profit, double loss = 1.0)
+        double calc_math_expectation_profit(double eff, double profit, double loss = 1.0)
         {
                 if(eff > 1.0 || eff < 0.0) return 0.0;
                 return (eff * profit) - ((1.0 - eff) * loss);
@@ -75,7 +75,8 @@ namespace BinaryOptionsEasy
          */
         double calc_min_strategy_eff(double profit, double loss = 1.0)
         {
-                return loss/(profit - loss);
+                // profit * eff - (1.0 - eff) *  loss
+                return loss/(profit + loss);
         }
 //------------------------------------------------------------------------------
         /** \brief Посчитать оптимальный процент ставки по критерию Келли
@@ -85,7 +86,7 @@ namespace BinaryOptionsEasy
          * \param attenuation коэффициент ослабления (рекомендуемое значение по умолчанию 0.4)
          * \return процент ставки (от 0 до 1.0)
          */
-        double calc_kelly_criterion(double eff, double profit, double attenuation = 0.4)
+        double calc_deposit_rate_kelly_criterion(double eff, double profit, double attenuation = 0.4)
         {
                 if(eff <= calc_min_strategy_eff(profit))
                         return 0.0;
@@ -133,7 +134,7 @@ namespace BinaryOptionsEasy
 //------------------------------------------------------------------------------
                 /** \brief Инициализировать класс
                  * \param _price цена входа в сделку
-                 * \param _payout процент выплаты в слуучае успеха
+                 * \param _profit процент выплаты в слуучае успеха
                  * \param _timestamp временная метка начала опциона
                  * \param _duration длительность опциона (секунды)
                  * \param _direction направление опциона (BUY или SELL)
@@ -144,7 +145,41 @@ namespace BinaryOptionsEasy
                         profit = _profit;
                         timestamp = _timestamp;
                         direction = _direction;
-                        _duration = _duration;
+                        duration = _duration;
+                }
+//------------------------------------------------------------------------------
+                /** \brief Инициализировать класс
+                 * \param _price цена входа в сделку
+                 * \param _profit процент выплаты в слуучае успеха
+                 * \param _timestamp временная метка начала опциона
+                 * \param _duration длительность опциона (секунды)
+                 * \param _direction направление опциона (BUY или SELL)
+                 * \param _status состояние сделки(WIN или LOSS)
+                 */
+                OptionData(double _price, double _profit, unsigned long long _timestamp, int _duration, int _direction, int _status)
+                {
+                        start_price = _price;
+                        profit = _profit;
+                        timestamp = _timestamp;
+                        direction = _direction;
+                        duration = _duration;
+                        status = _status;
+                }
+//------------------------------------------------------------------------------
+                /** \brief Инициализировать класс для теста без цены
+                 * \param _profit процент выплаты в слуучае успеха
+                 * \param _timestamp временная метка начала опциона
+                 * \param _direction направление опциона (BUY или SELL)
+                 * \param _status состояние сделки(WIN или LOSS)
+                 */
+                OptionData(double _profit, unsigned long long _timestamp, int _status)
+                {
+                        start_price = 0;
+                        profit = _profit;
+                        timestamp = _timestamp;
+                        direction = 0;
+                        duration = 1;
+                        status = _status;
                 }
 //------------------------------------------------------------------------------
                 /** \brief Получить временную метку конца сделки
@@ -165,10 +200,10 @@ namespace BinaryOptionsEasy
                 double min_amount = 0.0;                        /**< Минимальный размер ставки */
                 double deposit_accuracy = 100.0;                /**< Данный параметр определяет число знаков после запятой для депозита */
                 double average_strategy_eff = 0.5;              /**< Средняя эффективность стратегии */
-                double kelly_criterion_attenuation = 0.4;       /**< Коэффициент ослабления для критерия келии */
+                double kelly_criterion_attenuation = 0.2;       /**< Коэффициент ослабления для критерия Келии */
                 double martingale_coeff = 2.5;                  /**< Коэффициент мартингейла */
-                double martingale_stake = 0.01;                 /**< Начальная ставка по стратегии мартингейла */
-                int martingale_max_step = 7;                    /**< Максимальное число ступеней мартингейла */
+                double martingale_stake = 0.01;                 /**< Начальная ставка по стратегии Мартингейла */
+                int martingale_max_step = 7;                    /**< Максимальное число ступеней Мартингейла */
                 unsigned long long timestamp_beg = 0;           /**< Временная метка начала теста */
                 unsigned long long timestamp_end = 0;           /**< Временная метка конца теста */
 
@@ -178,7 +213,7 @@ namespace BinaryOptionsEasy
                  * \param _start_depo Начальный депозит
                  * \param _min_amount Минимальный размер ставки
                  * \param _average_strategy_eff Средняя эффективность стратегии
-                 * \param _kelly_criterion_attenuation Коэффициент ослабления для критерия Келии (по умолчанию 0.4)
+                 * \param _kelly_criterion_attenuation Коэффициент ослабления для критерия Келии (по умолчанию 0.2)
                  * \param _timestamp_beg Временная метка начала теста (0 если не задействована)
                  * \param _timestamp_end Временная метка конца теста (0 если не задействована)
                  */
@@ -186,7 +221,7 @@ namespace BinaryOptionsEasy
                         double _start_depo,
                         double _min_amount,
                         double _average_strategy_eff,
-                        double _kelly_criterion_attenuation = 0.4,
+                        double _kelly_criterion_attenuation = 0.2,
                         unsigned long long _timestamp_beg = 0,
                         unsigned long long _timestamp_end = 0)
                 {
@@ -220,8 +255,21 @@ namespace BinaryOptionsEasy
                 int num_wins = 0;                       /**< Количество удачрых сделок */
                 int num_losses = 0;                     /**< Количество неудачных сделок */
                 int num_deals = 0;                      /**< Количество сделок */
-                std::vector<double> array_depo;         /**< Массив изменения депозита */
+                std::vector<float> array_depo;         /**< Массив изменения депозита */
                 TestDataOut() {};
+
+                /** \brief Очистить данные
+                 */
+                void clear()
+                {
+                        array_depo.clear();
+                        depo = 0.0;
+                        eff = 0.0;
+                        gain = 0.0;
+                        num_wins = 0;
+                        num_losses = 0;
+                        num_deals = 0;
+                }
         };
 //------------------------------------------------------------------------------
         /** \brief Класс для проверки торговли бинарными опционами
@@ -292,6 +340,18 @@ namespace BinaryOptionsEasy
                         return OK;
                 }
 //------------------------------------------------------------------------------
+                int open_virtual_deal(double profit, unsigned long long index, int status)
+                {
+                        if(deals.size() > 0) {
+                                if(deals[deals.size() - 1].timestamp > index) {
+                                        return INVALID_PARAMETER;
+                                }
+                        }
+
+                        deals.push_back(OptionData(profit, index, status));
+                        return OK;
+                }
+//------------------------------------------------------------------------------
                 /** \brief Посчитать эффективность торговли
                  * \param eff эффективность протестированной стратегии (соотношение удачных сделок к общему числу сделок)
                  * \param timestamp_beg временная метка начала теста, указать 0 если не используется
@@ -324,17 +384,14 @@ namespace BinaryOptionsEasy
                 }
 //------------------------------------------------------------------------------
                 /** \brief Протестировать с использованием критерия Келли
-                 * Данный вид теста ставит всегда оптимальный процент от депозита
+                 * Данный вид теста всегда ставит оптимальный процент от депозита
                  * \param in параметры тестирования
                  * \param out результат тестирования
                  * \return вернет 0 в случае успеха
                  */
-                int test_with_kelly_criterion(TestDataIn in, TestDataOut &out)
+                int test_kelly_criterion(TestDataIn in, TestDataOut &out)
                 {
-                        out.num_losses = 0;
-                        out.num_wins = 0;
-                        out.num_deals = 0;
-                        out.array_depo.clear();
+                        out.clear();
                         out.array_depo.reserve(deals.size() + 1);
                         out.array_depo.push_back(in.start_depo);
                         out.depo = in.start_depo;
@@ -374,7 +431,7 @@ namespace BinaryOptionsEasy
                                         continue;
                                 // посчитаем размер ставки
                                 double amount = std::floor(out.depo *
-                                        calc_kelly_criterion(
+                                        calc_deposit_rate_kelly_criterion(
                                                 in.average_strategy_eff,
                                                 deals[i].profit,
                                                 in.kelly_criterion_attenuation) *
@@ -437,10 +494,7 @@ namespace BinaryOptionsEasy
                  */
                 int test_martingale(TestDataIn in, TestDataOut &out)
                 {
-                        out.num_losses = 0;
-                        out.num_wins = 0;
-                        out.num_deals = 0;
-                        out.array_depo.clear();
+                        out.clear();
                         out.array_depo.reserve(deals.size() + 1);
                         out.array_depo.push_back(in.start_depo);
                         out.depo = in.start_depo;
@@ -449,12 +503,14 @@ namespace BinaryOptionsEasy
                                 out.depo *
                                 in.martingale_stake *
                                 in.deposit_accuracy) / in.deposit_accuracy;
+                        double last_amount = amount;
                         for(size_t i = 0; i < deals.size(); ++i) {
                                 if(out.depo < in.min_amount) {
                                         break;
                                 }
                                 if(deals[i].status == WIN) {
-                                        out.depo += amount;
+                                        double payout = std::floor(amount * deals[i].profit * in.deposit_accuracy) / in.deposit_accuracy;
+                                        out.depo += payout;
                                         out.num_wins++;
                                         // посчитаем размер ставки
                                         amount = std::floor(
@@ -462,12 +518,13 @@ namespace BinaryOptionsEasy
                                                 in.martingale_stake *
                                                 in.deposit_accuracy) / in.deposit_accuracy;
                                         out.array_depo.push_back(out.depo);
+                                        last_amount = amount;
                                 } else
                                 if(deals[i].status == LOSS) {
                                         out.depo -= amount;
                                         amount = std::floor(
-                                                in.martingale_coeff *
-                                                amount *
+                                                std::pow(in.martingale_coeff, martingale_step) *
+                                                last_amount *
                                                 in.deposit_accuracy) / in.deposit_accuracy;
                                         out.array_depo.push_back(out.depo);
                                         martingale_step++;
@@ -479,6 +536,62 @@ namespace BinaryOptionsEasy
                                                         in.martingale_stake *
                                                         in.deposit_accuracy) / in.deposit_accuracy;
                                         }
+                                } // if
+                        } // for
+                        out.num_deals = out.num_wins + out.num_losses;
+                        if(out.num_deals == 0) {
+                                out.eff = 0.0;
+                                return DATA_NOT_AVAILABLE;
+                        }
+                        out.num_deals = out.num_wins + out.num_losses;
+                        out.eff = (double)out.num_wins/(double)out.num_deals;
+                        out.gain = out.array_depo.back()/out.array_depo.front();
+
+                        return OK;
+                }
+//------------------------------------------------------------------------------
+                /** \brief Протестировать с использованием системы Миллера
+                 * \param in параметры тестирования
+                 * \param out результат тестирования
+                 * \return вернет 0 в случае успеха
+                 */
+                int test_miller_system(TestDataIn in, TestDataOut &out)
+                {
+                        out.clear();
+                        out.array_depo.reserve(deals.size() + 1);
+                        out.array_depo.push_back(in.start_depo);
+                        out.depo = in.start_depo;
+
+                        const double DEPOSIT_RATE = 0.03;
+                        const double DEPOSIT_GAIN = 1.25;
+                        double last_depo = out.depo;
+
+                        double amount = std::floor(
+                                out.depo *
+                                DEPOSIT_RATE *
+                                in.deposit_accuracy) / in.deposit_accuracy;
+
+                        for(size_t i = 0; i < deals.size(); ++i) {
+                                if(out.depo < in.min_amount) {
+                                        break;
+                                }
+                                if(deals[i].status == WIN) {
+                                        double payout = std::floor(amount * deals[i].profit * in.deposit_accuracy) / in.deposit_accuracy;
+                                        out.depo += payout;
+                                        out.num_wins++;
+                                        if(out.depo >= last_depo * DEPOSIT_GAIN) {
+                                                amount = std::floor(
+                                                        out.depo *
+                                                        DEPOSIT_RATE *
+                                                        in.deposit_accuracy) / in.deposit_accuracy;
+                                                last_depo = out.depo;
+                                        }
+                                        out.array_depo.push_back(out.depo);
+                                } else
+                                if(deals[i].status == LOSS) {
+                                        out.depo -= amount;
+                                        out.num_losses++;
+                                        out.array_depo.push_back(out.depo);
                                 } // if
                         } // for
                         out.num_deals = out.num_wins + out.num_losses;
