@@ -29,7 +29,7 @@
 //------------------------------------------------------------------------------
 namespace BinaryApiEasy
 {
-
+//------------------------------------------------------------------------------
         enum ErrorType {
                 OK = 0,
                 UNKNOWN_ERROR = -3,
@@ -37,7 +37,7 @@ namespace BinaryApiEasy
                 NOT_ALL_DATA_DOWNLOADED = -8,
                 FILE_CANNOT_OPENED = -15,
         };
-
+//------------------------------------------------------------------------------
         enum QuotesType {
                 QUOTES_TICKS = 0,
                 QUOTES_BARS = 1,

@@ -488,7 +488,7 @@ namespace HistoricalDataEasy
                  * \param contract_type тип контракта (см. ContractType, доступно BUY и SELL)
                  * \param duration_sec длительность опциона в секундах
                  * \param timestamp временная метка начала опциона
-                 * \param indx позиция валютной пары в массиве валютных пар (должно совпадать с позицией массива path)
+                 * \param indx позиция валютной пары в массиве валютных пар (должно совпадать с позицией в массиве paths)
                  * \return состояние ошибки (0 в случае успеха)
                  */
                 int check_binary_option(int& state, int contract_type, int duration_sec, unsigned long long timestamp, int indx) {

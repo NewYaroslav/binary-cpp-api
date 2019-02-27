@@ -31,3 +31,6 @@
 [submodule "lib/imgui-sfml"]
 	path = lib/imgui-sfml
 	url = https://github.com/eliasdaler/imgui-sfml.git
+[submodule "lib/fann"]
+	path = lib/fann
+	url = https://github.com/libfann/fann.git
