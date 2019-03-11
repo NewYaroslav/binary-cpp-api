@@ -4,6 +4,21 @@
 #include "HistoricalDataEasy.hpp"
 
 int main() {
+        // проверим Расстояние Левенштайна
+        const std::string src = "125678";
+        const std::string dst = "5216789";
+        const std::string::size_type distance = AlgorithmsEasy::calc_levenstein_distance(src, dst);
+        std::cout << "distance " << distance << std::endl;
+        std::vector<double> vec_src, vec_dst;
+        vec_src.push_back(0.1);
+        vec_src.push_back(0.2);
+        vec_src.push_back(0.5);
+        vec_dst.push_back(0.1);
+        vec_dst.push_back(0.3);
+        vec_dst.push_back(0.5);
+        const std::string::size_type vec_distance = AlgorithmsEasy::calc_generalized_levenstein_distance(vec_src, vec_dst);
+        std::cout << "vec_distance " << vec_distance << std::endl;
+
         std::string path = "..//..//train_2//quotes_bars_data//frxEURGBP";
         HistoricalDataEasy::HistoricalData hist(path);
         hist.read_all_data();
@@ -20,6 +35,7 @@ int main() {
         IndicatorsEasy::RSI<double, IndicatorsEasy::EMA<double>> rsi(PERIOD_RSI);
         IndicatorsEasy::BollingerBands<double> bb(PERIOD_BB, STD_DEV_BB);
         IndicatorsEasy::DetectorWaveform<double> dw(100);
+
         /*
                 30, 240, 0.6
         */

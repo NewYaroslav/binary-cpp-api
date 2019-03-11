@@ -67,6 +67,7 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
+		<Unit filename="../../include/AlgorithmsEasy.hpp" />
 		<Unit filename="../../include/BinaryAPI.hpp" />
 		<Unit filename="../../include/BinaryApiEasy.hpp" />
 		<Unit filename="../../include/CorrelationEasy.hpp" />

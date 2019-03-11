@@ -30,10 +30,12 @@
 #include <cmath>
 #include <CorrelationEasy.hpp>
 #include <NormalizationEasy.hpp>
+#include <AlgorithmsEasy.hpp>
 //------------------------------------------------------------------------------
 namespace IndicatorsEasy
 {
 //------------------------------------------------------------------------------
+        /// Набор возможных состояний ошибки
         enum ErrorType {
                 OK = 0,
                 NO_INIT = -4,
@@ -915,6 +917,7 @@ namespace IndicatorsEasy
                                         if(err_n != OK) return err_n;
                                         T coeff_up = 0, coeff_dn = 0;
                                         int err_up = CorrelationEasy::calculate_spearman_rank_correlation_coefficient(fragment_data, exp_data_up_[len_waveform-MIN_WAVEFORM_LEN], coeff_up);
+                                        //AlgorithmsEasy::calc_levenstein_distance(fragment_data, exp_data_up_[len_waveform-MIN_WAVEFORM_LEN])
                                         int err_dn = CorrelationEasy::calculate_spearman_rank_correlation_coefficient(fragment_data, exp_data_dn_[len_waveform-MIN_WAVEFORM_LEN], coeff_dn);
                                         if(err_up != OK) return err_up;
                                         if(err_dn != OK) return err_dn;

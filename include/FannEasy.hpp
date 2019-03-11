@@ -179,26 +179,26 @@ namespace FannEasy
         protected:
                 struct fann* ann = NULL;
                 fann_type* input = NULL;
-                is_init = false;
+                bool is_init = false;
                 int num_input = 0;
-                int num_outpuut = 0;
+                int num_output = 0;
 //------------------------------------------------------------------------------
         public:
-                virtual BaseNet()
+                BaseAnn()
                 {
 
                 }
 //------------------------------------------------------------------------------
-                virtual BaseNet(std::string path)
+                BaseAnn(std::string path)
                 {
                         ann = fann_create_from_file(path.c_str());
                         num_input = fann_get_num_input(ann);
-                        num_outpuut = fann_get_num_output(ann);
+                        num_output = fann_get_num_output(ann);
                         input = (fann_type*)malloc(num_input * sizeof(fann_type));
                         is_init = true;
                 }
 //------------------------------------------------------------------------------
-                virtual ~BaseNet()
+                virtual ~BaseAnn()
                 {
                         if(is_init) {
                                 fann_destroy(ann);
@@ -217,7 +217,7 @@ namespace FannEasy
                         conversion(in, input);
                         fann_type* calc_out = fann_run(ann, input);
                         out.resize(num_output);
-                        for(int i = 0; i < nOutput; i++) {
+                        for(int i = 0; i < num_output; i++) {
                                 out[i] = calc_out[i];
                         }
                 }
