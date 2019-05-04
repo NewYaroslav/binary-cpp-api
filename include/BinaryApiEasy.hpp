@@ -427,6 +427,7 @@ namespace BinaryApiEasy
                         if(end_timestamp > _end_timestamp) {
                             end_timestamp = _end_timestamp;
                         }
+						is_init = true;
                     }
                 }
                 if(!is_init)

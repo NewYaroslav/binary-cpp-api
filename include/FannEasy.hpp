@@ -174,6 +174,7 @@ namespace FannEasy
                 return pos;
         }
 //------------------------------------------------------------------------------
+        template<class T>
         class BaseAnn {
 //------------------------------------------------------------------------------
         protected:
@@ -206,7 +207,7 @@ namespace FannEasy
                         }
                 }
 //------------------------------------------------------------------------------
-                virtual int updata(std::vector<double>& in, std::vector<double>& out)
+                virtual int update(std::vector<T>& in, std::vector<T>& out)
                 {
                         if(!is_init) {
                                 return NO_INIT;

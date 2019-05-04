@@ -117,7 +117,7 @@ namespace AlgorithmsEasy
         }
 //------------------------------------------------------------------------------
         template<class T>
-        calc_dtw(const std::vector<T> &q, const std::vector<T> &c)
+        void calc_dtw(const std::vector<T> &q, const std::vector<T> &c)
         {
                 size_t n = q.size();
                 size_t m = c.size();

@@ -437,8 +437,8 @@ namespace HistoricalDataEasy
                  */
                 inline int get_beg_end_timestamp(unsigned long long &_beg_timestamp, unsigned long long &_end_timestamp)
                 {
-                        beg_timestamp = _beg_timestamp;
-                        end_timestamp = _end_timestamp;
+                        _beg_timestamp = beg_timestamp;
+                        _end_timestamp = end_timestamp;
                         if(!is_init) {
                                 return NO_INIT;
                         }
