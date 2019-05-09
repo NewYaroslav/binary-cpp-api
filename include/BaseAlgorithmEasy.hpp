@@ -30,79 +30,187 @@
 namespace BaseAlgorithmEasy
 {
 //------------------------------------------------------------------------------
+        enum ErrorType {
+                OK = 0,                 ///< Ошибок нет
+                INVALID_PARAMETER = -6, ///< Неверно задан параметр
+                DATA_NOT_AVAILABLE = -7,///< Данные не доступны
+        };
+//------------------------------------------------------------------------------
+        enum ForecastType {
+                UP = 1,                 ///< Прогноз на ставку вверх (BUY)
+                DN = -1,                ///< Прогноз на ставку вниз  (SELL)
+                NO_FORECAST = 0,        ///< Нет прогноза
+        };
+//------------------------------------------------------------------------------
         /** \brief Класс для построения алгоритмов торговли
          */
-        class BigFather {
-        protected:
-                unsigned long long timestamp;   /**< Временная метка */
+        class BigFatherRobots {
         public:
-//------------------------------------------------------------------------------
-                enum ErrorType {
-                        OK = 0,
-                        INVALID_PARAMETER = -6,
-                        DATA_NOT_AVAILABLE = -7,
-                };
-//------------------------------------------------------------------------------
-                /** \brief
-                 */
-                virtual int optimization()
-                {
 
-                }
-//------------------------------------------------------------------------------
-                /** \brief Торговать
-                 * \param price_data данные цен по всем валютным парам
-                 * \param time_data временные метки по всем валютным парам
-                 * \param buy_data проценты выплат для ставок BUY
-                 * \param sell_data проценты выплат для ставок SELL
-                 * \return
+                /** \brief Сбросить состояния индикаторов
+                 * Данный метод очищает внутренние состояния индикаторов
                  */
-                virtual int trade(
-                                std::vector<std::vector<double>> &price_data,
-                                std::vector<std::vector<unsigned long long>> &time_data,
-                                std::vector<double> &buy_data,
-                                std::vector<double> &sell_data)
-                {
+                virtual void reset_indicators() {};
 
+                /** \brief Протестировать индикаторы робота на цене
+                 * \param price цена
+                 * \param timestamp временная метка
+                 * \param indx индекс котировок
+                 * \param forecast состояние прогнозирования робота
+                 * \return вернет 0 в случае успеха
+                 */
+                virtual int test_indicators(double price, unsigned long long timestamp, int indx, int &forecast) {};
+
+                /** \brief Обновить внутренние состояния индикаторов робота
+                 * \param price цена
+                 * \param timestamp временная метка
+                 * \param indx индекс котировок
+                 * \param forecast состояние прогнозирования робота
+                 * \return вернет 0 в случае успеха
+                 */
+                virtual int update_indicators(double price, unsigned long long timestamp, int indx, int &forecast) {};
+
+                /** \brief Обновить внутренние состояния индикаторов робота
+                 * \param price цены
+                 * \param timestamp временная метка
+                 * \param forecast состояние прогнозов робота
+                 * \return вернет 0 в случае успеха
+                 */
+                virtual int update_indicators(std::vector<double> &price, unsigned long long timestamp, std::vector<int> &forecast) {};
+
+                /** \brief Получить время экспирации опциона (в секундах)
+                 * \return время экспирации опциона (значение меньше 0 означает ошибку)
+                 */
+                virtual int get_duration() {};
+
+                /** \brief Установить длительность бинарного опциона
+                 * \param duration длительность бинарного опциона в секундах
+                 */
+                virtual void set_duration(int duration) {};
+
+                /** \brief Получить задержку перед началом работы робота
+                 * \return задержка в секундах
+                 */
+                virtual int get_delay_before_work() {
                         return 0;
                 }
+        };
 //------------------------------------------------------------------------------
-                /** \brief Протестировать алгоритм
-                 * \param beg_timestamp временная метка начала тестирования
-                 * \param end_timestamp временная метка конца тестирования
-                 * \param payout_paths массив директорий моделей процентов выплат
-                 * \param history_paths путь к папке с историческими данными
-                 * \param dictionary_file библиотека для zstd, если не используется, указать пустую строку (по умолчанию не используется)
-                 * \return верент 0 в случае успеха
+        /** \brief Класс робота для торговли по индикатору Боллинджер
+         */
+        class SimpleBbRobot : public BigFatherRobots {
+                private:
+                std::vector<IndicatorsEasy::BollingerBands<double>> iBB;
+                int duration_ = xtime::SEC_MINUTE * 3;
+                int delay_before_work_ = 0;
+                public:
+                SimpleBbRobot() {};
+
+                /** \brief Инициализировать робота
+                 * \param period периоды Боллинджера
+                 * \param std_factor множители стандартного отклонения Боллинджера
                  */
-                virtual int test(
-                                unsigned long long beg_timestamp,
-                                unsigned long long end_timestamp,
-                                unsigned long long timestamp_step,
-                                std::vector<std::string> payout_paths,
-                                std::vector<std::string> history_paths,
-                                std::string dictionary_file = "")
+                SimpleBbRobot(std::vector<int> periods, std::vector<double> std_factors) {
+                        if(periods.size() != std_factors.size() || periods.size() == 0)
+                                return;
+                        iBB.resize(periods.size());
+                        for(size_t i = 0; i < periods.size(); ++i) {
+                                iBB[i] = IndicatorsEasy::BollingerBands<double>(periods[i], std_factors[i]);
+                                delay_before_work_ = std::max(delay_before_work_, periods[i]);
+                        }
+                };
+
+                /** \brief Сбросить состояния индикаторов
+                 * Данный метод очищает внутренние состояния индикаторов
+                 */
+                virtual void reset_indicators()
                 {
-                        BasePayoutModelEasy iPayout(payout_paths);                                      // имитация процентов выплат
-                        HistoricalDataMultipleCurrencies iHistory(history_paths, dictionary_file);      // загрузка исторических данных
-                        unsigned long long _beg_timestamp = 0, _end_timestamp = 0;                      // начало и конец исторических данных
-                        iHistory.get_beg_end_timestamp(_beg_timestamp, _end_timestamp);
-                        if(_beg_timestamp > beg_timestamp || end_timestamp > _end_timestamp)
-                                return DATA_NOT_AVAILABLE;
-                        for(unsigned long long t = beg_timestamp; t <= end_timestamp; t+= timestamp_step)
-                        {
-                                // получаем данные цены для всех валютных пар
-                                std::vector<double> price;
-                                iHistory.get_data(price, t);
-                                // получаем проценты выплат
-                                iPayout.
-                                std::vector<double> buy_data, sell_data;
-
-                                // торгуем
-
-                        } // for
+                        for(size_t i = 0; i < iBB.size(); ++i) {
+                                iBB[i].clear();
+                        }
                 }
-//------------------------------------------------------------------------------
+
+                /** \brief Протестировать робота на цене
+                 * \param price цена
+                 * \param timestamp временная метка
+                 * \param indx индекс котировок
+                 * \param forecast состояние прогнозирования робота
+                 * \return вернет 0 в случае успеха
+                 */
+                virtual int test_indicators(double price, unsigned long long timestamp, int indx, int &forecast)
+                {
+                        forecast = NO_FORECAST;
+                        if(indx >= iBB.size())
+                                return INVALID_PARAMETER;
+                        double ml, tl, bl;
+                        int err = iBB[indx].test(price, tl, ml, bl);
+                        if(err != OK) return err;
+                        if(price > tl) {
+                                forecast = DN;
+                        } else
+                        if(price < bl) {
+                                forecast = UP;
+                        }
+                        return OK;
+                }
+
+                /** \brief Обновить внутренние состояния робота
+                 * \param price цена
+                 * \param timestamp временная метка
+                 * \param indx индекс котировок
+                 * \param forecast состояние прогнозирования робота
+                 * \return вернет 0 в случае успеха
+                 */
+                virtual int update_indicators(double price, unsigned long long timestamp, int indx, int &forecast)
+                {
+                        forecast = NO_FORECAST;
+                        if(indx >= iBB.size())
+                                return INVALID_PARAMETER;
+                        double ml, tl, bl;
+                        int err = iBB[indx].update(price, tl, ml, bl);
+                        if(err != OK) return err;
+                        if(price > tl) {
+                                forecast = DN;
+                        } else
+                        if(price < bl) {
+                                forecast = UP;
+                        }
+                        return OK;
+                }
+
+                /** \brief Обновить внутренние состояния робота
+                 * \param price цены всех валютных пар
+                 * \param timestamp временная метка
+                 * \param forecast состояния прогнозирования робота
+                 * \return вернет 0 в случае успеха
+                 */
+                virtual int update_indicators(std::vector<double> &price, unsigned long long timestamp, std::vector<int> &forecast)
+                {
+                        if(price.size() != iBB.size())
+                                return INVALID_PARAMETER;
+                        forecast.resize(iBB.size());
+                        for(size_t n = 0; n < iBB.size(); ++n) {
+                                update_indicators(price[n], timestamp, n, forecast[n]);
+                        }
+                        return OK;
+                }
+
+                /** \brief Установить длительность бинарного опциона
+                 * \param duration длительность бинарного опциона в секундах
+                 */
+                virtual void set_duration(int duration) {
+                        duration_ = duration;
+                };
+
+                /** \brief Получить время экспирации опциона (в секундах)
+                 * \return время экспирации опциона (значение меньше 0 означает ошибку)
+                 */
+                virtual int get_duration() {return duration_;};
+
+                /** \brief Получить задержку перед началом работы робота
+                 * \return задержка в секундах
+                 */
+                virtual int get_delay_before_work() {return delay_before_work_;}
         };
 //------------------------------------------------------------------------------
 }

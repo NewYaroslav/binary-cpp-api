@@ -30,38 +30,36 @@
 namespace HistoricalDataEasy
 {
 //------------------------------------------------------------------------------
-
+        /// Набор возможных состояний ошибки
+        enum ErrorType {
+                OK = 0,                         ///< Ошибки нет, все в порядке
+                NO_INIT = -4,                   ///< Не было инициализации перед использованием метода
+                INVALID_PARAMETER = -6,         ///< Параметр имеет недопустимое значение
+                DATA_NOT_AVAILABLE = -7,        ///< Данные не доступны (их нет)
+                NO_TIMESTAMP = - 14,            ///< Нет временной метки (данные не содержат цен с требуемой временной меткой)
+        };
+//------------------------------------------------------------------------------
+        /// Типы контрактов
+        enum ContractType {
+                NO_CONTRACT = 0,                ///< Нет контрактов
+                BUY = 1,                        ///< Ставка на повышение
+                SELL = -1,                      ///< Ставка на понижение
+        };
+//------------------------------------------------------------------------------
+        /// Типы состояний
+        enum StateType {
+                WIN = 1,                        ///< Опцион завершился удачно
+                NEUTRAL = 0,                    ///< Опцион завершился в ничью
+                LOSS = -1,                      ///< Опцион был не верно спрогнозирован
+                END_OF_DATA = 2,                ///< Конец данных
+                SKIPPING_DATA = -2,             ///< Пропуск данных (нет цен за указанный период)
+                NORMAL_DATA = 0,                ///< Нормальный доступ к данным
+        };
 //------------------------------------------------------------------------------
         /** \brief Класс для удобного использования исторических данных
          */
-        class HistoricalData
+        class CurrencyHistory
         {
-        public:
-//------------------------------------------------------------------------------
-                /// Набор возможных состояний ошибки
-                enum ErrorType {
-                        OK = 0,                         ///< Ошибки нет, все в порядке
-                        NO_INIT = -4,                   ///< Не было инициализации перед использованием метода
-                        INVALID_PARAMETER = -6,         ///< Параметр имеет недопустимое значение
-                        DATA_NOT_AVAILABLE = -7,        ///< Данные не доступны (их нет)
-                        NO_TIMESTAMP = - 14,            ///< Нет временной метки (данные не содержат цен с требуемой временной меткой)
-                };
-//------------------------------------------------------------------------------
-                /// Типы контрактов
-                enum ContractType {
-                        BUY = 1,                        ///< Ставка на повышение
-                        SELL = -1,                      ///< Ставка на понижение
-                };
-//------------------------------------------------------------------------------
-                /// Типы состояний
-                enum StateType {
-                        WIN = 1,                        ///< Опцион завершился удачно
-                        NEUTRAL = 0,                    ///< Опцион завершился в ничью
-                        LOSS = -1,                      ///< Опцион был не верно спрогнозирован
-                        END_OF_DATA = 2,                ///< Конец данных
-                        SKIPPING_DATA = -2,             ///< Пропуск данных (нет цен за указанный период)
-                        NORMAL_DATA = 0,                ///< Нормальный доступ к данным
-                };
 //------------------------------------------------------------------------------
         private:
                 std::string dictionary_file_;
@@ -71,6 +69,10 @@ namespace HistoricalDataEasy
                 std::vector<unsigned long long> times;
                 size_t pos = 0;
 //------------------------------------------------------------------------------
+                /** \brief Прочитать файл
+                 * \param timestamp временная метка
+                 * \return врнет состояние, 0 в случае успеха
+                 */
                 int read_file(unsigned long long timestamp)
                 {
                         prices.clear();
@@ -166,7 +168,7 @@ namespace HistoricalDataEasy
                  * \param path директория с файлами исторических данных
                  * \param dictionary_file файл словаря (если указано "", то считываются несжатые файлы)
                  */
-                HistoricalData(std::string path, std::string dictionary_file = "") :
+                CurrencyHistory(std::string path, std::string dictionary_file = "") :
                 dictionary_file_(dictionary_file), path_(path)
                 {
 
@@ -175,7 +177,7 @@ namespace HistoricalDataEasy
                 /** \brief Получить данные массива цен
                  * \return Массив цен
                  */
-                std::vector<double> get_array_prices()
+                inline std::vector<double> get_array_prices()
                 {
                         return prices;
                 }
@@ -183,17 +185,17 @@ namespace HistoricalDataEasy
                 /** \brief Получить данные массива временных меток
                  * \return Массив временных меток
                  */
-                std::vector<unsigned long long> get_array_times()
+                inline std::vector<unsigned long long> get_array_times()
                 {
                         return times;
                 }
 //------------------------------------------------------------------------------
-                /** \brief Получить данные цены тика или цены закрытия свечи
-                 * \param data цена на указанной временной метке
+                /** \brief Получить данные цены тика или цены закрытия свечи на указанной временной метке
+                 * \param price цена на указанной временной метке
                  * \param timestamp временная метка
                  * \return состояние огибки, 0 если все в порядке
                  */
-                int get_data(double& data, unsigned long long timestamp)
+                int get_price(double& price, unsigned long long timestamp)
                 {
                         if(times.size() > 0 &&
                                 timestamp >= times[0] &&
@@ -203,7 +205,7 @@ namespace HistoricalDataEasy
                                 if(lower == times.end())
                                         return DATA_NOT_AVAILABLE;
                                 size_t pos = std::distance(times.cbegin(), lower);
-                                data = prices[pos];
+                                price = prices[pos];
                                 return OK;
                         } else {
                                 int err = read_file(timestamp);
@@ -214,43 +216,40 @@ namespace HistoricalDataEasy
                                 if(lower == times.end())
                                         return DATA_NOT_AVAILABLE;
                                 size_t pos = std::distance(times.cbegin(), lower);
-                                data = prices[pos];
+                                price = prices[pos];
                                 return OK;
                         }
                 }
 //------------------------------------------------------------------------------
                 /** \brief Получить данные цен тиков или цен закрытия свечей
                  * Внимание! Для цен закрытия свечей указывается временная метка НАЧАЛА свечи
-                 * \param data цены тиков или цены закрытия свечей
-                 * \param data_size количество данных для записи в data
+                 * \param prices цены тиков или цены закрытия свечей
+                 * \param data_size количество данных для записи в prices
                  * \param step шаг времени
                  * \param timestamp временная метка
                  * \return состояние огибки, 0 если все в порядке
                  */
-                int get_data(std::vector<double>& data, int data_size, int step, unsigned long long timestamp)
+                int get_prices(std::vector<double>& prices, int data_size, int step, unsigned long long timestamp)
                 {
                         unsigned long long& t1 = timestamp;
                         unsigned long long t2 = timestamp + data_size * step;
 
                         while(true) {
                                 if(times.size() > 0) {
-                                        //std::cout << "cmp " << xtime::get_str_unix_date_time(t1) << " / " << xtime::get_str_unix_date_time(t2) << std::endl;
-                                        //std::cout << "dat " << xtime::get_str_unix_date_time(times[0]) << " / " << xtime::get_str_unix_date_time(times.back()) << std::endl;
                                         if(t1 >= times[0] && t2 <= times.back()) {
                                                 // если данные находятся в пределах загруженных данных
                                                 auto lower = std::lower_bound(times.cbegin(), times.cend(), timestamp);
                                                 if(lower == times.end())
                                                         return NO_TIMESTAMP;
                                                 size_t pos = std::distance(times.cbegin(), lower);
-                                                data.clear();
-                                                data.reserve(data_size);
+                                                prices.clear();
+                                                prices.reserve(data_size);
                                                 unsigned long long t0 = t1;
                                                 while(true) {
                                                         unsigned long long current_time = times[pos];
-                                                        //std::cout << xtime::get_str_unix_date_time(current_time) << std::endl;
                                                         if(t0 == current_time) { // временная метка существует
-                                                                data.push_back(prices[pos]); // добавляем цену
-                                                                if(data.size() == (size_t)data_size) // если буфер заполнен, выходим
+                                                                prices.push_back(prices[pos]); // добавляем цену
+                                                                if(prices.size() == (size_t)data_size) // если буфер заполнен, выходим
                                                                         return OK;
                                                                 t0 += step; // иначе ставим следующую временную метку
                                                                 pos++; // увеличиваем позицию в массивах
@@ -269,23 +268,19 @@ namespace HistoricalDataEasy
                                                 return DATA_NOT_AVAILABLE;
                                         } else
                                         if(t1 >= times[0] && t2 > times.back()) {
-                                                //std::cout << "add_dara_from_file (1) " << xtime::get_str_unix_date_time(times.back() + xtime::SEC_DAY) << std::endl;
                                                 int err = add_data_from_file(times.back() + xtime::SEC_DAY);
                                                 if(err != OK)
                                                         return err;
                                         } else
                                         if(t1 < times[0] && t2 <= times.back()) {
-                                                //std::cout << "add_dara_from_file (2) " << xtime::get_str_unix_date_time(times[0] - xtime::SEC_DAY) << std::endl;
                                                 int err = add_data_from_file(times[0] - xtime::SEC_DAY);
                                                 if(err != OK)
                                                         return err;
                                         } else
                                         if(t1 < times[0] && t2 > times.back()) {
-                                                //std::cout << "add_dara_from_file (3) " << xtime::get_str_unix_date_time(times[0] - xtime::SEC_DAY) << std::endl;
                                                 int err = add_data_from_file(times[0] - xtime::SEC_DAY);
                                                 if(err != OK)
                                                         return err;
-                                                //std::cout << "add_dara_from_file (4) " << xtime::get_str_unix_date_time(times.back() + xtime::SEC_DAY) << std::endl;
                                                 err = add_data_from_file(times.back() + xtime::SEC_DAY);
                                                 if(err != OK)
                                                         return err;
@@ -312,10 +307,10 @@ namespace HistoricalDataEasy
                         unsigned long long& t1 = timestamp;
                         unsigned long long t2 = t1 + duration_sec;
                         double price_start, price_stop;
-                        int err = get_data(price_start, t1);
+                        int err = get_price(price_start, t1);
                         if(err != OK)
                                 return err;
-                        err = get_data(price_stop, t2);
+                        err = get_price(price_stop, t2);
                         if(err != OK)
                                 return err;
                         //std::cout << price_start << " " << price_stop << std::endl;
@@ -395,33 +390,24 @@ namespace HistoricalDataEasy
 //------------------------------------------------------------------------------
         /** \brief Класс для удобного использования исторических данных нескольких валютных пар
          */
-        class HistoricalDataMultipleCurrencies
+        class MultipleCurrencyHistory
         {
         private:
 //------------------------------------------------------------------------------
-                std::vector<HistoricalData> datas;              /**< Вектор с историческими данными цен */
+                std::vector<CurrencyHistory> currencies;              /**< Вектор с историческими данными цен */
                 unsigned long long beg_timestamp = 0;           /**< Временная метка начала исторических данных по всем валютным парам */
                 unsigned long long end_timestamp = 0;           /**< Временная метка конца исторических данных по всем валютным парам */
                 bool is_init = false;
 //------------------------------------------------------------------------------
         public:
-                /// Набор возможных состояний ошибки
-                enum ErrorType {
-                        OK = 0,                                 ///< Ошибки нет, все в порядке
-                        NO_INIT = -4,                           ///< Не было инициализации перед использованием метода
-                        INVALID_PARAMETER = -6,                 ///< Параметр имеет недопустимое значение
-                        DATA_NOT_AVAILABLE = -7,                ///< Данные не доступны (их нет)
-                        NO_TIMESTAMP = - 14,                    ///< Нет временной метки (данные не содержат цен с требуемой временной меткой)
-                };
-//------------------------------------------------------------------------------
                 /** \brief Инициализировать класс
                  * \param paths директории с файлами исторических данных
                  * \param dictionary_file файл словаря (если указано "", то считываются несжатые файлы)
                  */
-                HistoricalDataMultipleCurrencies(std::vector<std::string> paths, std::string dictionary_file = "")
+                MultipleCurrencyHistory(std::vector<std::string> paths, std::string dictionary_file = "")
                 {
                         for(size_t i = 0; i < paths.size(); ++i) {
-                                datas.push_back(HistoricalData(paths[i], dictionary_file));
+                                currencies.push_back(CurrencyHistory(paths[i], dictionary_file));
                         }
                         if(BinaryApiEasy::get_beg_end_timestamp_for_paths(paths, ".", beg_timestamp, end_timestamp) == OK) {
                                 if(beg_timestamp != end_timestamp) {
@@ -453,14 +439,14 @@ namespace HistoricalDataEasy
                  * \param timestamp временная метка
                  * \return состояние огибки, 0 если все в порядке
                  */
-                int get_data(std::vector<std::vector<double>>& array_prices, int data_size, int step, unsigned long long timestamp)
+                int get_prices(std::vector<std::vector<double>>& array_prices, int data_size, int step, unsigned long long timestamp)
                 {
                         if(!is_init) {
                                 return NO_INIT;
                         }
-                        array_prices.resize(datas.size());
-                        for(size_t i = 0; i < datas.size(); ++i) {
-                                int err = datas[i].get_data(array_prices[i], data_size, step, timestamp);
+                        array_prices.resize(currencies.size());
+                        for(size_t i = 0; i < currencies.size(); ++i) {
+                                int err = currencies[i].get_prices(array_prices[i], data_size, step, timestamp);
                                 if(err != OK) {
                                         return err;
                                 }
@@ -468,19 +454,19 @@ namespace HistoricalDataEasy
                         return OK;
                 }
 //------------------------------------------------------------------------------
-                /** \brief Получить массив цен со всех валютных пар
+                /** \brief Получить массив цен со всех валютных пар по временной метке
                  * \param prices массив цен со всех валютных пар за данную веремнную метку
                  * \param timestamp временная метка
                  * \return вернет 0 в случае успеха
                  */
-                int get_data(std::vector<double> &prices, unsigned long long timestamp)
+                int get_price(std::vector<double> &prices, unsigned long long timestamp)
                 {
                         if(!is_init) {
                                 return NO_INIT;
                         }
-                        prices.resize(datas.size());
-                        for(size_t i = 0; i < datas.size(); ++i) {
-                                int err = datas[i].get_data(prices[i], timestamp);
+                        prices.resize(currencies.size());
+                        for(size_t i = 0; i < currencies.size(); ++i) {
+                                int err = currencies[i].get_price(prices[i], timestamp);
                                 if(err != OK) {
                                         return err;
                                 }
@@ -500,10 +486,10 @@ namespace HistoricalDataEasy
                         if(!is_init) {
                                 return NO_INIT;
                         }
-                        if(indx >= (int)datas.size()) {
+                        if(indx >= (int)currencies.size()) {
                                 return INVALID_PARAMETER;
                         }
-                        return datas[indx].check_binary_option(state, contract_type, duration_sec, timestamp);
+                        return currencies[indx].check_binary_option(state, contract_type, duration_sec, timestamp);
                 }
 //------------------------------------------------------------------------------
         };

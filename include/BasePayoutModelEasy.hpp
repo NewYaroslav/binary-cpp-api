@@ -32,7 +32,7 @@ namespace BasePayoutModelEasy
         {
         public:
 //------------------------------------------------------------------------------
-                virtual BasePayout()
+                BasePayout()
                 {
 
                 }
@@ -49,7 +49,7 @@ namespace BasePayoutModelEasy
                 /** \brief Инициализировать базовый класс процентов выплат
                  * \param paths массив файлов настроек для модели процентов выплат
                  */
-                virtual BasePayout(std::vector<std::string> paths)
+                BasePayout(std::vector<std::string> paths)
                 {
                         init(paths);
                 }
