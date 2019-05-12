@@ -427,6 +427,7 @@ namespace CorrelationEasy
         bool check_correlation_coefficient_t_criterion(double p, int significance_level, int size)
         {
                 int degrees_freedom = size - 2;
+                p =  std::abs(p);
                 double t_criterion = get_critical_t_points(significance_level, degrees_freedom);
                 if((t_criterion * std::sqrt((1.0 - p * p) / (double)degrees_freedom)) < p) {
                         return true;
