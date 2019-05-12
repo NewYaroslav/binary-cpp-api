@@ -34,14 +34,15 @@ namespace NormalizationEasy
 //------------------------------------------------------------------------------
         /// Набор возможных состояний ошибки
         enum ErrorType {
-                OK = 0,
-                NO_INIT = -4,
-                INVALID_PARAMETER = -6,
+                OK = 0,                         ///< Ошибок нет, все в порядке
+                NO_INIT = -4,                   ///< Не было инициализации, поэтому метод класса не может быть использован
+                INVALID_PARAMETER = -6,         ///< Какой-то параметр в методе имеет недопустмое значение
         };
 //------------------------------------------------------------------------------
+        /// Типы нормализации данных
         enum NormalizationType {
-                MINMAX_0_1 = 0,
-                MINMAX_1_1 = 1,
+                MINMAX_0_1 = 0,                 ///< Данные приводятся к уровню от 0 до 1
+                MINMAX_1_1 = 1,                 ///< Данные приводятся к уровню от -1 до 1
         };
 //------------------------------------------------------------------------------
         /** \brief MinMax нормализация данных
@@ -55,8 +56,14 @@ namespace NormalizationEasy
         {
                 if(in.size() == 0)
                         return INVALID_PARAMETER;
-                T1 max_data = *std::max_element(in.begin(), in.end());
-                T1 min_data = *std::min_element(in.begin(), in.end());
+                auto it_max_data = std::max_element(in.begin(), in.end());
+                auto it_min_data = std::min_element(in.begin(), in.end());
+                T1 max_data = in[0];
+                T1 min_data = in[0];
+                if(it_max_data != in.end() && it_min_data != in.end()) {
+                    max_data = *it_max_data;
+                    min_data = *it_min_data;
+                }
                 T1 ampl = max_data - min_data;
                 out.resize(in.size());
                 if(ampl != 0) {
