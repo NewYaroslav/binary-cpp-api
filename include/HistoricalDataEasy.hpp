@@ -27,6 +27,12 @@
 #include "ZstdEasy.hpp"
 #include "BinaryApiEasy.hpp"
 //------------------------------------------------------------------------------
+#define HISTORICALDATAEASY_USE_THREAD 1
+
+#if HISTORICALDATAEASY_USE_THREAD == 1
+#include <thread>
+#endif
+//------------------------------------------------------------------------------
 namespace HistoricalDataEasy
 {
 //------------------------------------------------------------------------------
@@ -454,6 +460,7 @@ namespace HistoricalDataEasy
                         return OK;
                 }
 //------------------------------------------------------------------------------
+#if HISTORICALDATAEASY_USE_THREAD == 0
                 /** \brief Получить массив цен со всех валютных пар по временной метке
                  * \param prices массив цен со всех валютных пар за данную веремнную метку
                  * \param timestamp временная метка
@@ -473,6 +480,42 @@ namespace HistoricalDataEasy
                         }
                         return OK;
                 }
+#else
+                /** \brief Получить массив цен со всех валютных пар по временной метке
+                 * \param prices массив цен со всех валютных пар за данную веремнную метку
+                 * \param timestamp временная метка
+                 * \return вернет 0 в случае успеха
+                 */
+                int get_price(std::vector<double> &prices, unsigned long long timestamp)
+                {
+                        if(!is_init) {
+                                return NO_INIT;
+                        }
+                        prices.resize(currencies.size());
+                        std::vector<std::thread> list_thread(prices.size());
+                        std::mutex price_mutex;
+                        int gerr = OK;
+                        for(size_t i = 0; i < currencies.size(); ++i) {
+                                list_thread[i] = std::thread([&, i, timestamp]() {
+                                        double price = 0;
+                                        int err = currencies[i].get_price(price, timestamp);
+                                        if(err != OK) {
+                                                price_mutex.lock();
+                                                gerr = err;
+                                                price_mutex.unlock();
+                                        } else {
+                                                price_mutex.lock();
+                                                prices[i] = price;
+                                                price_mutex.unlock();
+                                        }
+                                });
+                        }
+                        for(size_t i = 0; i < list_thread.size(); ++i) {
+                                list_thread[i].join();
+                        }
+                        return gerr;
+                }
+#endif // HISTORICALDATAEASY_USE_THRESHOLD
 //------------------------------------------------------------------------------
                 /** \brief Проверить бинарный опцион
                  * \param state состояние бинарного опциона (уданая сделка WIN = 1, убыточная LOSS = -1 и нейтральная 0)

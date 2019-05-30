@@ -32,17 +32,101 @@ namespace BinaryApiEasy
 //------------------------------------------------------------------------------
         /// Набор возможных состояний ошибки
         enum ErrorType {
-                OK = 0,
-                UNKNOWN_ERROR = -3,
-                INVALID_PARAMETER = -6,
+                OK = 0,                         ///< Ошибок нет, все в порядке
+                UNKNOWN_ERROR = -3,             ///< Неопределенная ошибка
+                INVALID_PARAMETER = -6,         ///< Один из параметров неверно указан
                 NOT_ALL_DATA_DOWNLOADED = -8,
-                FILE_CANNOT_OPENED = -15,
+                FILE_CANNOT_OPENED = -15,       ///< Файл не может быть открыт
         };
 //------------------------------------------------------------------------------
         enum QuotesType {
-                QUOTES_TICKS = 0,
-                QUOTES_BARS = 1,
+                QUOTES_TICKS = 0,               ///< Котировки тиков
+                QUOTES_BARS = 1,                ///< Котировки баров
         };
+//------------------------------------------------------------------------------
+        /** \brief Получить список символов
+         * \return список валютных пар и индексов
+         */
+        inline std::vector<std::string> get_list_symbol()
+        {
+                const std::vector<std::string> symbols = {
+                        "WLDAUD",
+                        "WLDEUR",
+                        "WLDGBP",
+                        "WLDUSD",
+                        "frxAUDCAD",
+                        "frxAUDCHF",
+                        "frxAUDJPY",
+                        "frxAUDNZD",
+                        "frxAUDUSD",
+                        "frxEURAUD",
+                        "frxEURCAD",
+                        "frxEURCHF",
+                        "frxEURGBP",
+                        "frxEURJPY",
+                        "frxEURNZD",
+                        "frxEURUSD",
+                        "frxGBPAUD",
+                        "frxGBPCAD",
+                        "frxGBPCHF",
+                        "frxGBPJPY",
+                        "frxGBPNOK",
+                        "frxGBPNZD",
+                        //"frxGBPPLN",
+                        "frxGBPUSD",
+                        "frxNZDJPY",
+                        "frxNZDUSD",
+                        "frxUSDCAD",
+                        "frxUSDCHF",
+                        "frxUSDJPY",
+                        //"frxUSDNOK",
+                        "frxUSDPLN",
+                        //"frxUSDSEK",
+                        "R_100",
+                        "R_50",
+                        "R_25",
+                        "R_10"
+                };
+                return symbols;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить список символов только валютных пар
+         * \return список валютных пар
+         */
+        inline std::vector<std::string> get_list_symbol_without_index()
+        {
+                const std::vector<std::string> symbols = {
+                        "frxAUDCAD",//0
+                        "frxAUDCHF",
+                        "frxAUDJPY",
+                        "frxAUDNZD",
+                        "frxAUDUSD",
+                        "frxEURAUD",//5
+                        "frxEURCAD",
+                        "frxEURCHF",
+                        "frxEURGBP",
+                        "frxEURJPY",
+                        "frxEURNZD",//10
+                        "frxEURUSD",
+                        "frxGBPAUD",
+                        "frxGBPCAD",
+                        "frxGBPCHF",
+                        "frxGBPJPY",//15
+                        "frxGBPNOK",
+                        "frxGBPNZD",
+                        //"frxGBPPLN",
+                        "frxGBPUSD",
+                        "frxNZDJPY",
+                        "frxNZDUSD",//20
+                        "frxUSDCAD",
+                        "frxUSDCHF",
+                        "frxUSDJPY",
+                        //"frxUSDNOK",
+                        "frxUSDPLN",
+                        //"frxUSDSEK",
+                };
+                return symbols;
+        }
 //------------------------------------------------------------------------------
         /** \brief Загрузить данные за последние пару дней
          * Данная функция загружает полные данные за день за последние N дней
@@ -427,7 +511,7 @@ namespace BinaryApiEasy
                         if(end_timestamp > _end_timestamp) {
                             end_timestamp = _end_timestamp;
                         }
-						is_init = true;
+                        is_init = true;
                     }
                 }
                 if(!is_init)
