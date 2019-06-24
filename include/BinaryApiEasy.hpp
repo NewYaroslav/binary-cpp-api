@@ -35,6 +35,7 @@ namespace BinaryApiEasy
                 OK = 0,                         ///< Ошибок нет, все в порядке
                 UNKNOWN_ERROR = -3,             ///< Неопределенная ошибка
                 INVALID_PARAMETER = -6,         ///< Один из параметров неверно указан
+                DATA_NOT_AVAILABLE = -7,        ///< Данные не доступны
                 NOT_ALL_DATA_DOWNLOADED = -8,
                 FILE_CANNOT_OPENED = -15,       ///< Файл не может быть открыт
         };
@@ -245,6 +246,7 @@ namespace BinaryApiEasy
          * \param file_name имя файла
          * \param prices котировки
          * \param times временные метки
+         * \return вернет 0 в случае успеха
          */
         int read_binary_quotes_file(std::string file_name,
                                     std::vector<double> &prices,
@@ -516,6 +518,64 @@ namespace BinaryApiEasy
                 }
                 if(!is_init)
                     return UNKNOWN_ERROR;
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить временную метку начала и конца данных для выгрузки
+         * Данная функция вернет данные для выгрузки, начиная с вчерашнего дня или дня, который есть в исторических данных
+         * За указаный перид. Т.е. по сути данная фукнция позволяет получить последние N дней.
+         * \param path директория с файлами исторических данных
+         * \param symbol имя валютной пары
+         * \param file_extension расширение файла (например .hex или .zstd)
+         * \param real_timestamp текущая временная метка
+         * \param max_days количество дней
+         * \param beg_timestamp первая дата, встречающееся среди файлов
+         * \param end_timestamp последняя дата, встречающееся среди файлов
+         * \return вернет 0 в случае успеха
+         */
+        int get_beg_end_timestamp(
+                std::string path,
+                std::string symbol,
+                std::string file_extension,
+                unsigned long long real_timestamp,
+                int max_days,
+                unsigned long long &beg_timestamp,
+                unsigned long long &end_timestamp,
+                bool is_use_day_off = false) {
+
+                xtime::DateTime iRealTime(real_timestamp);
+                iRealTime.set_beg_day();
+                unsigned long long timestamp = iRealTime.get_timestamp() - xtime::SEC_DAY;
+
+                beg_timestamp = std::numeric_limits<unsigned long long>::max();
+                end_timestamp = std::numeric_limits<unsigned long long>::min();
+                int days = 0;
+                int err_days = 0;
+                const int MAX_ERR_DAYS = 30;
+                while(true) {
+                        if(!is_use_day_off) { // пропускаем выходной день
+                                int wday = xtime::get_weekday(timestamp);
+                                if(wday == xtime::SUN || wday == xtime::SAT) {
+                                    timestamp -= xtime::SEC_DAY;
+                                    continue;
+                                }
+                        }
+                        std::string name = path + "\\" + symbol + "\\" + get_file_name_from_date(timestamp);
+                        //std::cout << "name " << name << std::endl;
+                        if(bf::check_file(name + file_extension)) {
+                                days++;
+                                if(end_timestamp == std::numeric_limits<unsigned long long>::min()) {
+                                        end_timestamp = timestamp;
+                                } else if(days == max_days) {
+                                        beg_timestamp = timestamp;
+                                        return OK;
+                                }
+                                timestamp -= xtime::SEC_DAY;
+                        } else {
+                                err_days++;
+                                if(err_days == MAX_ERR_DAYS) return DATA_NOT_AVAILABLE;
+                        }
+                }
                 return OK;
         }
 //------------------------------------------------------------------------------

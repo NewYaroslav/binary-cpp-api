@@ -27,7 +27,7 @@
 #include "ZstdEasy.hpp"
 #include "BinaryApiEasy.hpp"
 //------------------------------------------------------------------------------
-#define HISTORICALDATAEASY_USE_THREAD 1
+#define HISTORICALDATAEASY_USE_THREAD 0
 
 #if HISTORICALDATAEASY_USE_THREAD == 1
 #include <thread>
@@ -70,10 +70,12 @@ namespace HistoricalDataEasy
         private:
                 std::string dictionary_file_;
                 std::string path_;
-                std::string current_file_name = "";
+                std::string name_;
+                std::string file_extension_;
                 std::vector<double> prices;
                 std::vector<unsigned long long> times;
                 size_t pos = 0;
+                size_t last_pos = 0;
 //------------------------------------------------------------------------------
                 /** \brief Прочитать файл
                  * \param timestamp временная метка
@@ -86,15 +88,14 @@ namespace HistoricalDataEasy
                         int err = 0;
 
                         std::string file_name = path_ + "//" + BinaryApiEasy::get_file_name_from_date(timestamp);
+                        file_name += file_extension_;
                         if(dictionary_file_ != "") {
-                                file_name += ".zstd";
                                 err = ZstdEasy::read_binary_quotes_compress_file(
                                         file_name,
                                         dictionary_file_,
                                         prices,
                                         times);
                         } else {
-                                file_name += ".hex";
                                 err = BinaryApiEasy::read_binary_quotes_file(
                                         file_name,
                                         prices,
@@ -113,15 +114,14 @@ namespace HistoricalDataEasy
                         std::vector<unsigned long long> _times;
                         int err = 0;
                         std::string file_name = path_ + "//" + BinaryApiEasy::get_file_name_from_date(timestamp);
+                        file_name += file_extension_;
                         if(dictionary_file_ != "") {
-                                file_name += ".zstd";
                                 err = ZstdEasy::read_binary_quotes_compress_file(
                                         file_name,
                                         dictionary_file_,
                                         _prices,
                                         _times);
                         } else {
-                                file_name += ".hex";
                                 err = BinaryApiEasy::read_binary_quotes_file(
                                         file_name,
                                         _prices,
@@ -177,7 +177,38 @@ namespace HistoricalDataEasy
                 CurrencyHistory(std::string path, std::string dictionary_file = "") :
                 dictionary_file_(dictionary_file), path_(path)
                 {
-
+                        std::vector<std::string> element;
+                        bf::parse_path(path, element);
+                        name_ = element.back();
+                        if(dictionary_file != "") {
+                                file_extension_ = ".zstd";
+                        } else {
+                                file_extension_ = ".hex";
+                        }
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить имя валютной пары
+                 * \return имя валютной пары
+                 */
+                inline std::string get_name()
+                {
+                        return name_;
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить директорию файлов
+                 * \return директория файлов
+                 */
+                inline std::string get_path()
+                {
+                        return path_;
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить расширение файла
+                 * \return расширение файла
+                 */
+                inline std::string get_file_extension()
+                {
+                        return file_extension_;
                 }
 //------------------------------------------------------------------------------
                 /** \brief Получить данные массива цен
@@ -203,6 +234,12 @@ namespace HistoricalDataEasy
                  */
                 int get_price(double& price, unsigned long long timestamp)
                 {
+
+                        if(times.size() > last_pos && times[last_pos] == timestamp) {
+                                price = prices[last_pos];
+                                last_pos++;
+                                return OK;
+                        } else
                         if(times.size() > 0 &&
                                 timestamp >= times[0] &&
                                 timestamp <= times.back()) {
@@ -210,8 +247,9 @@ namespace HistoricalDataEasy
                                 auto lower = std::lower_bound(times.cbegin(), times.cend(), timestamp);
                                 if(lower == times.end())
                                         return DATA_NOT_AVAILABLE;
-                                size_t pos = std::distance(times.cbegin(), lower);
-                                price = prices[pos];
+                                last_pos = std::distance(times.cbegin(), lower);
+                                price = prices[last_pos];
+                                last_pos++;
                                 return OK;
                         } else {
                                 int err = read_file(timestamp);
@@ -221,8 +259,9 @@ namespace HistoricalDataEasy
                                 auto lower = std::lower_bound(times.cbegin(), times.cend(), timestamp);
                                 if(lower == times.end())
                                         return DATA_NOT_AVAILABLE;
-                                size_t pos = std::distance(times.cbegin(), lower);
-                                price = prices[pos];
+                                last_pos = std::distance(times.cbegin(), lower);
+                                price = prices[last_pos];
+                                last_pos++;
                                 return OK;
                         }
                 }
@@ -247,24 +286,24 @@ namespace HistoricalDataEasy
                                                 auto lower = std::lower_bound(times.cbegin(), times.cend(), timestamp);
                                                 if(lower == times.end())
                                                         return NO_TIMESTAMP;
-                                                size_t pos = std::distance(times.cbegin(), lower);
+                                                size_t indx = std::distance(times.cbegin(), lower);
                                                 prices.clear();
                                                 prices.reserve(data_size);
                                                 unsigned long long t0 = t1;
                                                 while(true) {
-                                                        unsigned long long current_time = times[pos];
+                                                        unsigned long long current_time = times[indx];
                                                         if(t0 == current_time) { // временная метка существует
-                                                                prices.push_back(prices[pos]); // добавляем цену
+                                                                prices.push_back(prices[indx]); // добавляем цену
                                                                 if(prices.size() == (size_t)data_size) // если буфер заполнен, выходим
                                                                         return OK;
                                                                 t0 += step; // иначе ставим следующую временную метку
-                                                                pos++; // увеличиваем позицию в массивах
-                                                                if(pos >= times.size())
+                                                                indx++; // увеличиваем позицию в массивах
+                                                                if(indx >= times.size())
                                                                         return NO_TIMESTAMP;
                                                         } else
                                                         if(t0 > current_time) {
-                                                                pos++; // увеличиваем позицию в массивах
-                                                                if(pos >= times.size())
+                                                                indx++; // увеличиваем позицию в массивах
+                                                                if(indx >= times.size())
                                                                         return NO_TIMESTAMP;
                                                         } else {
                                                                 // временная метка отсутсвует, выходим
@@ -400,9 +439,9 @@ namespace HistoricalDataEasy
         {
         private:
 //------------------------------------------------------------------------------
-                std::vector<CurrencyHistory> currencies;              /**< Вектор с историческими данными цен */
-                unsigned long long beg_timestamp = 0;           /**< Временная метка начала исторических данных по всем валютным парам */
-                unsigned long long end_timestamp = 0;           /**< Временная метка конца исторических данных по всем валютным парам */
+                std::vector<CurrencyHistory> currencies;                /**< Вектор с историческими данными цен */
+                unsigned long long beg_timestamp = 0;                   /**< Временная метка начала исторических данных по всем валютным парам */
+                unsigned long long end_timestamp = 0;                   /**< Временная метка конца исторических данных по всем валютным парам */
                 bool is_init = false;
 //------------------------------------------------------------------------------
         public:
@@ -420,6 +459,16 @@ namespace HistoricalDataEasy
                                         is_init = true;
                                 }
                         }
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить число валют в классе исторических данных
+                 * \return число валют
+                 */
+                int get_number_currencies()
+                {
+                        if(is_init){
+                                return currencies.size();
+                        } else return NO_INIT;
                 }
 //------------------------------------------------------------------------------
                 /** \brief Найти первую и последнюю дату файлов
@@ -517,6 +566,17 @@ namespace HistoricalDataEasy
                 }
 #endif // HISTORICALDATAEASY_USE_THRESHOLD
 //------------------------------------------------------------------------------
+                /** \brief Получить массив цен со всех валютных пар по временной метке
+                 * \param prices массив цен со всех валютных пар за данную веремнную метку
+                 * \param timestamp временная метка
+                 * \return вернет 0 в случае успеха
+                 */
+                int get_price(double &price, unsigned long long timestamp, int index)
+                {
+                        if(!is_init) return NO_INIT;
+                        return currencies[index].get_price(price, timestamp);
+                }
+//------------------------------------------------------------------------------
                 /** \brief Проверить бинарный опцион
                  * \param state состояние бинарного опциона (уданая сделка WIN = 1, убыточная LOSS = -1 и нейтральная 0)
                  * \param contract_type тип контракта (см. ContractType, доступно BUY и SELL)
@@ -533,6 +593,33 @@ namespace HistoricalDataEasy
                                 return INVALID_PARAMETER;
                         }
                         return currencies[indx].check_binary_option(state, contract_type, duration_sec, timestamp);
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить имя валютной пары по индексу
+                 * \param index индекс валютной пары
+                 * \return имя валютной пары
+                 */
+                inline std::string get_name(int index)
+                {
+                        return currencies[index].get_name();
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить директорию файлов
+                 * \param index индекс валютной пары
+                 * \return директория файлов
+                 */
+                inline std::string get_path(int index)
+                {
+                        return currencies[index].get_path();
+                }
+//------------------------------------------------------------------------------
+                /** \brief Получить расширение файла
+                 * \param index индекс валютной пары
+                 * \return расширение файла
+                 */
+                inline std::string get_file_extension(int index)
+                {
+                        return currencies[index].get_file_extension();
                 }
 //------------------------------------------------------------------------------
         };

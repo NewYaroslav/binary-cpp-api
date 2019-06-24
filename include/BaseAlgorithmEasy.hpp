@@ -59,7 +59,7 @@ namespace BaseAlgorithmEasy
                  * \param forecast состояние прогнозирования робота
                  * \return вернет 0 в случае успеха
                  */
-                virtual int test_indicators(double price, unsigned long long timestamp, int indx, int &forecast) {};
+                virtual int test_indicators(double price, unsigned long long timestamp, int indx, int &forecast) {return DATA_NOT_AVAILABLE;};
 
                 /** \brief Обновить внутренние состояния индикаторов робота
                  * \param price цена
@@ -68,7 +68,7 @@ namespace BaseAlgorithmEasy
                  * \param forecast состояние прогнозирования робота
                  * \return вернет 0 в случае успеха
                  */
-                virtual int update_indicators(double price, unsigned long long timestamp, int indx, int &forecast) {};
+                virtual int update_indicators(double price, unsigned long long timestamp, int indx, int &forecast) {return DATA_NOT_AVAILABLE;};
 
                 /** \brief Обновить внутренние состояния индикаторов робота
                  * \param price цены
@@ -76,12 +76,12 @@ namespace BaseAlgorithmEasy
                  * \param forecast состояние прогнозов робота
                  * \return вернет 0 в случае успеха
                  */
-                virtual int update_indicators(std::vector<double> &price, unsigned long long timestamp, std::vector<int> &forecast) {};
+                virtual int update_indicators(std::vector<double> &price, unsigned long long timestamp, std::vector<int> &forecast, std::vector<int> &bots) {return DATA_NOT_AVAILABLE;};
 
                 /** \brief Получить время экспирации опциона (в секундах)
                  * \return время экспирации опциона (значение меньше 0 означает ошибку)
                  */
-                virtual int get_duration() {};
+                virtual int get_duration() {return DATA_NOT_AVAILABLE;};
 
                 /** \brief Установить длительность бинарного опциона
                  * \param duration длительность бинарного опциона в секундах
@@ -92,7 +92,7 @@ namespace BaseAlgorithmEasy
                  * \return задержка в секундах
                  */
                 virtual int get_delay_before_work() {
-                        return 0;
+                        return DATA_NOT_AVAILABLE;
                 }
         };
 //------------------------------------------------------------------------------
@@ -103,6 +103,7 @@ namespace BaseAlgorithmEasy
                 std::vector<IndicatorsEasy::BollingerBands<double>> iBB;
                 int duration_ = xtime::SEC_MINUTE * 3;
                 int delay_before_work_ = 0;
+                const int bot_id_ = 0;
                 public:
                 SimpleBbRobot() {};
 
@@ -118,6 +119,7 @@ namespace BaseAlgorithmEasy
                                 iBB[i] = IndicatorsEasy::BollingerBands<double>(periods[i], std_factors[i]);
                                 delay_before_work_ = std::max(delay_before_work_, periods[i]);
                         }
+                        delay_before_work_ *= xtime::SEC_MINUTE;
                 };
 
                 /** \brief Сбросить состояния индикаторов
@@ -184,13 +186,15 @@ namespace BaseAlgorithmEasy
                  * \param forecast состояния прогнозирования робота
                  * \return вернет 0 в случае успеха
                  */
-                virtual int update_indicators(std::vector<double> &price, unsigned long long timestamp, std::vector<int> &forecast)
+                virtual int update_indicators(std::vector<double> &price, unsigned long long timestamp, std::vector<int> &forecast, std::vector<int> &bots)
                 {
                         if(price.size() != iBB.size())
                                 return INVALID_PARAMETER;
                         forecast.resize(iBB.size());
+                        bots.resize(iBB.size());
                         for(size_t n = 0; n < iBB.size(); ++n) {
                                 update_indicators(price[n], timestamp, n, forecast[n]);
+                                bots[n] = bot_id_;
                         }
                         return OK;
                 }

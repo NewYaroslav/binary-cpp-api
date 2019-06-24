@@ -31,15 +31,17 @@
 #include <CorrelationEasy.hpp>
 #include <NormalizationEasy.hpp>
 #include <AlgorithmsEasy.hpp>
+
+#define INDICATORSEASY_DEF_RING_BUFFER_SIZE 64
 //------------------------------------------------------------------------------
 namespace IndicatorsEasy
 {
 //------------------------------------------------------------------------------
         /// Набор возможных состояний ошибки
         enum ErrorType {
-                OK = 0,
-                NO_INIT = -4,
-                INVALID_PARAMETER = -6,
+                OK = 0,                             ///< Ошибок нет, все в порядке
+                NO_INIT = -4,                       ///< Нет инициализации
+                INVALID_PARAMETER = -6,             ///< Неверный параметр
                 INDICATOR_NOT_READY_TO_WORK = -16,
         };
 //------------------------------------------------------------------------------
@@ -71,7 +73,7 @@ namespace IndicatorsEasy
         template<typename T1, typename T2>
         int calculate_standard_deviation(std::vector<T1> &input, T2 &output, size_t period, size_t start_pos = 0)
         {
-                if(input.size() <= start_pos + period)
+                if(input.size() < start_pos + period)
                         return INVALID_PARAMETER;
                 T1 mean = std::accumulate(input.begin() + start_pos, input.begin() + start_pos + period, T1(0));
                 mean /= (T1)period;
@@ -84,17 +86,108 @@ namespace IndicatorsEasy
                 return OK;
         }
 //------------------------------------------------------------------------------
-        /** \brief Простая скользящая средняя
+        template <typename T, int SIZE = INDICATORSEASY_DEF_RING_BUFFER_SIZE>
+        class RingBuffer {
+        public:
+                //std::vector<T> data;
+                T data[SIZE];
+        private:
+                int pos = 0;
+                int data_size = 0;
+                int read_count = 0;
+        public:
+                RingBuffer() {};
+
+                RingBuffer(size_t size) {
+                        //data.resize(size);
+                        data_size = size;
+                }
+
+                void resize(size_t size) {
+                        //data.resize(size);
+                        data_size = size;
+                }
+
+                inline int size() {
+                        return data_size;
+                }
+
+                inline int count() {
+                        return read_count;
+                }
+
+                void push(T value) {
+                        data[pos] = value;
+                        pos =(pos + 1) % data_size;
+                        if(read_count < data_size) read_count++;
+                }
+
+                bool empty() {
+                        if(read_count > 0) return false;
+                        return true;
+                }
+
+                void clear() {
+                        pos = 0;
+                        read_count = 0;
+                }
+
+                inline T& operator[] (int i) {
+                        return data[(pos + i) % data_size];
+                }
+
+                inline const T operator[] (int i)const {
+                        return data[(pos + i) % data_size];
+                }
+
+                std::vector<T> get_data() {
+                        std::vector<T> temp(data_size);
+                        for(int i = 0; i < data_size; ++i) {
+                                temp[i] = (data[(pos + i) % data_size]);
+                        }
+                        return temp;
+                }
+#if(0)
+                inline std::vector<T> get_raw_data() {
+                        return data;
+                }
+#endif
+                inline double get_sum() {
+                        double sum = 0;
+                        for(int i = 0; i < data_size; ++i) {
+                                sum += (data[(pos + i) % data_size]);
+                        }
+                        return sum;
+                }
+        };
+//------------------------------------------------------------------------------
+        /** \brief Базовый класс индикатора
          */
         template <typename T>
-        class SMA
+        class BaseIndicator {
+                public:
+                virtual int update(T in) {return INVALID_PARAMETER;};
+                virtual int test(T in) {return INVALID_PARAMETER;};
+                virtual int update(T in, T &out) {return INVALID_PARAMETER;};
+                virtual int test(T in, T &out) {return INVALID_PARAMETER;};
+                virtual int update(T in, std::vector<T> &out) {return INVALID_PARAMETER;};
+                virtual int test(T in, std::vector<T> &out) {return INVALID_PARAMETER;};
+                virtual void clear() {};
+        };
+//------------------------------------------------------------------------------
+        /** \brief Простая скользящая средняя
+         */
+        template <typename T, int SIZE = INDICATORSEASY_DEF_RING_BUFFER_SIZE>
+        class SMA : BaseIndicator<T>
         {
         private:
-                std::vector<T> data_;
+                RingBuffer<T, SIZE> data_;
                 T last_data_;
                 int period_ = 0;
+                int pos_ = 0;
         public:
                 SMA() {};
+
                 /** \brief Инициализировать простую скользящую среднюю
                  * \param period период
                  */
@@ -102,7 +195,7 @@ namespace IndicatorsEasy
                 {
                         if(period_ < 0)
                                 period_ = -period_;
-                        data_.reserve(period_);
+                        data_.resize(period_);
                 }
 
                 /** \brief Обновить состояние индикатора
@@ -116,18 +209,20 @@ namespace IndicatorsEasy
                                 out = 0;
                                 return NO_INIT;
                         }
-                        if(data_.size() < (size_t)period_) {
-                                data_.push_back(in);
-                                if(data_.size() == (size_t)period_) {
-                                        T sum = std::accumulate(data_.begin(), data_.end(), T(0));
-                                        out = last_data_ = sum / (T)period_;
+                        if(data_.count() < period_) {
+                                data_.push(in);
+                                if(data_.count() == period_) {
+                                        //T sum = std::accumulate(data_.data.begin(), data_.data.end(), T(0));
+                                        T sum = data_.get_sum();
+                                        last_data_ = sum ;
+                                        out = sum / (T)period_;
+                                        pos_ = 0;
                                         return OK;
                                 }
                         } else {
-                                last_data_ = last_data_ - data_[0] + in;
-                                data_.push_back(in);
-                                data_.erase(data_.begin());
-                                out = last_data_;
+                                last_data_ = last_data_ + (in - data_[0]);
+                                data_.push(in);
+                                out = last_data_/(T)period_;
                                 return OK;
                         }
                         out = 0;
@@ -146,16 +241,17 @@ namespace IndicatorsEasy
                                 out = 0;
                                 return NO_INIT;
                         }
-                        std::vector<T> _data = data_;
-                        if(_data.size() < (size_t)period_) {
-                                _data.push_back(in);
-                                if(_data.size() == (size_t)period_) {
-                                        T sum = std::accumulate(_data.begin(), _data.end(), T(0));
+                        RingBuffer<T, SIZE> _data = data_;
+                        if(_data.count() < (size_t)period_) {
+                                _data.push(in);
+                                if(_data.count() == (size_t)period_) {
+                                        //T sum = std::accumulate(_data.data.begin(), _data.data.end(), T(0));
+                                        T sum = _data.get_sum();
                                         out = sum / (T)period_;
                                         return OK;
                                 }
                         } else {
-                                out = last_data_ - data_[0] + in;
+                                out = (last_data_ - data_[0] + in)/(T)period_;
                                 return OK;
                         }
                         out = 0;
@@ -167,13 +263,14 @@ namespace IndicatorsEasy
                 void clear()
                 {
                         data_.clear();
+                        pos_ = 0;
                 }
         };
 //------------------------------------------------------------------------------
         /** \brief Взвешенное скользящее среднее
          */
         template <typename T>
-        class WMA
+        class WMA : BaseIndicator<T>
         {
         private:
                 std::vector<T> data_;
@@ -273,7 +370,7 @@ namespace IndicatorsEasy
         /** \brief Экспоненциально взвешенное скользящее среднее
          */
         template <typename T>
-        class EMA
+        class EMA : BaseIndicator<T>
         {
         private:
                 std::vector<T> data_;
@@ -354,6 +451,8 @@ namespace IndicatorsEasy
         class MMA : public EMA<T>
         {
         public:
+                MMA() {};
+
                 /** \brief Инициализировать модифицированное скользящее среднее
                  * \param period период
                  */
@@ -369,7 +468,7 @@ namespace IndicatorsEasy
         /** \brief Скользящее окно
          */
         template <typename T>
-        class MW
+        class MW : BaseIndicator<T>
         {
         private:
                 std::vector<T> data_;
@@ -414,6 +513,29 @@ namespace IndicatorsEasy
                         return INDICATOR_NOT_READY_TO_WORK;
                 }
 
+                /** \brief Обновить состояние индикатора
+                 * \param in сигнал на входе
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int update(T in)
+                {
+                        is_test_ = false;
+                        if(period_ == 0) {
+                                return NO_INIT;
+                        }
+                        if(data_.size() < (size_t)period_) {
+                                data_.push_back(in);
+                                if(data_.size() == (size_t)period_) {
+                                        return OK;
+                                }
+                        } else {
+                                data_.push_back(in);
+                                data_.erase(data_.begin());
+                                return OK;
+                        }
+                        return INDICATOR_NOT_READY_TO_WORK;
+                }
+
                 /** \brief Протестировать индикатор
                  * Данная функция отличается от update тем, что не влияет на внутреннее состояние индикатора
                  * \param in сигнал на входе
@@ -442,6 +564,31 @@ namespace IndicatorsEasy
                         return INDICATOR_NOT_READY_TO_WORK;
                 }
 
+                /** \brief Протестировать индикатор
+                 * Данная функция отличается от update тем, что не влияет на внутреннее состояние индикатора
+                 * \param in сигнал на входе
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int test(T in)
+                {
+                        is_test_ = true;
+                        if(period_ == 0) {
+                                return NO_INIT;
+                        }
+                        data_test_ = data_;
+                        if(data_test_.size() < (size_t)period_) {
+                                data_test_.push_back(in);
+                                if(data_test_.size() == (size_t)period_) {
+                                        return OK;
+                                }
+                        } else {
+                                data_test_.push_back(in);
+                                data_test_.erase(data_test_.begin());
+                                return OK;
+                        }
+                        return INDICATOR_NOT_READY_TO_WORK;
+                }
+
                 /** \brief Получить данные внутреннего буфера индикатора
                  * \param out буфер
                  */
@@ -455,63 +602,185 @@ namespace IndicatorsEasy
 
                 /** \brief Получить максимальное значение буфера
                  * \param out максимальное значение
+                 * \param offset смещение в массиве
                  */
-                void get_max_data(T &out)
+                void get_max_data(T &out, const size_t offset = 0)
                 {
                         if(is_test_)
-                                out = *std::max_element(data_test_.begin(), data_test_.end());
+                                out = *std::max_element(data_test_.begin() + offset, data_test_.end());
                         else
-                                out = *std::max_element(data_.begin(), data_.end());
+                                out = *std::max_element(data_.begin() + offset, data_.end());
                 }
 
                 /** \brief Получить минимальное значение буфера
                  * \param out минимальное значение
+                 * \param offset смещение в массиве
                  */
-                void get_min_data(T &out)
+                void get_min_data(T &out, const size_t offset = 0)
                 {
                         if(is_test_)
-                                out = *std::min_element(data_test_.begin(), data_test_.end());
+                                out = *std::min_element(data_test_.begin() + offset, data_test_.end());
                         else
-                                out = *std::min_element(data_.begin(), data_.end());
+                                out = *std::min_element(data_.begin() + offset, data_.end());
                 }
 
                 /** \brief Получить среднее значение буфера
                  * \param out среднее значение
+                 * \param offset смещение в массиве
                  */
-                void get_average_data(T &out)
+                void get_average_data(T &out, const size_t offset = 0)
                 {
                         if(is_test_) {
-                                T sum = std::accumulate(data_test_.begin(), data_test_.end(), T(0));
-                                out = sum / (T)data_test_.size();
+                                T sum = std::accumulate(data_test_.begin() + offset, data_test_.end(), T(0));
+                                out = sum / (T)(data_test_.size() - offset);
                         } else {
-                                T sum = std::accumulate(data_.begin(), data_.end(), T(0));
-                                out = sum / (T)data_.size();
+                                T sum = std::accumulate(data_.begin() + offset, data_.end(), T(0));
+                                out = sum / (T)(data_.size() - offset);
+                        }
+                }
+
+                /** \brief Получить набор средних значений и стандартного отклонения буфера
+                 * Минимальный период равен 2
+                 * \param average_data массив средних значений
+                 * \param std_data массив стандартного отклонения
+                 * \param min_period минимальный период
+                 * \param min_period максимальный период
+                 * \param step_period шаг периода
+                 */
+                void get_average_and_std_data(std::vector<T> &average_data, std::vector<T> &std_data, size_t min_period, size_t max_period, size_t step_period)
+                {
+                        min_period--;
+                        max_period--;
+                        average_data.clear();
+                        std_data.clear();
+                        if(is_test_) {
+                                T sum = 0;
+                                T sum_std = 0;
+                                int num_element = 0;
+                                for(int i = (int)data_test_.size() - 1; i >= 0; --i) { // начинаем список с конца
+                                        sum += data_test_[i]; // находим сумму элементов
+                                        if(num_element > max_period) break;
+                                        if(num_element >= min_period) {
+                                                num_element++; // находим число элементов
+                                                T ml = (T)(sum/(T)num_element); // находим среднее
+                                                average_data.push_back(ml); // добавляем среднее
+                                                T sum_std = 0;
+                                                int max_len = (int)data_test_.size() - num_element;
+                                                for(int j = (int)data_test_.size() - 1; j >= max_len; --j) {
+                                                        T diff = (data_test_[j] - ml);
+                                                        sum_std += diff * diff;
+                                                }
+                                                std_data.push_back((T)std::sqrt(sum_std / (T)(num_element - 1)));
+                                                min_period += step_period;
+                                        } else {
+                                                num_element++;
+                                        }
+                                } // for i
+                        } else {
+                                T sum = 0;
+                                T sum_std = 0;
+                                int num_element = 0;
+                                for(int i = (int)data_.size() - 1; i >= 0; --i) { // начинаем список с конца
+                                        sum += data_[i]; // находим сумму элементов
+                                        if(num_element > max_period) break;
+                                        if(num_element >= min_period) {
+                                                num_element++; // находим число элементов
+                                                T ml = (T)(sum/(T)num_element); // находим среднее
+                                                average_data.push_back(ml); // добавляем среднее
+                                                T sum_std = 0;
+                                                int max_len = (int)data_.size() - num_element;
+                                                for(int j = (int)data_.size() - 1; j >= max_len; j--) {
+                                                        T diff = (data_[j] - ml);
+                                                        sum_std += diff * diff;
+                                                }
+                                                std_data.push_back((T)std::sqrt(sum_std / (T)(num_element - 1)));
+                                                min_period += step_period;
+                                        } else {
+                                                num_element++;
+                                        }
+                                } // for i
+                        }
+                }
+
+                /** \brief Получить массив значений RSI
+                 * \param rsi_data массив значений RSI
+                 * \param min_period минимальный период
+                 * \param min_period максимальный период
+                 * \param step_period шаг периода
+                 */
+                void get_rsi_data(std::vector<T> &rsi_data, size_t min_period, size_t max_period, size_t step_period) {
+                        min_period--;
+                        max_period--;
+                        rsi_data.clear();
+                        if(is_test_) {
+                                T sum_u = 0, sum_d = 0;
+                                int num_element = 0;
+                                for(int i = (int)data_test_.size() - 1; i >= 1; --i) { // начинаем список с конца
+                                        T u = 0, d = 0;
+                                        const T prev_ = data_test_[i - 1];
+                                        const T in_ = data_test_[i];
+                                        if(prev_ < in_) u = in_ - prev_;
+                                        else if(prev_ > in_) d = prev_ - in_;
+                                        sum_u += u;
+                                        sum_d += d;
+                                        if(num_element > max_period) break;
+                                        if(num_element >= min_period) {
+                                                num_element++;
+                                                u = sum_u /(T)num_element;
+                                                d = sum_d /(T)num_element;
+                                                if(d == 0) rsi_data.push_back(100.0);
+                                                else rsi_data.push_back(((T)100.0 - ((T)100.0 / ((T)1.0 + (u / d)))));
+                                                min_period += step_period;
+                                        } else {
+                                                num_element++;
+                                        }
+                                } // for i
+                        } else {
+                                T sum_u = 0;
+                                T sum_d = 0;
+                                int num_element = 0;
+                                for(int i = (int)data_.size() - 1; i >= 1; --i) { // начинаем список с конца
+                                        if(data_[i - 1] < data_[i]) sum_u += data_[i] - data_[i - 1];
+                                        else if(data_[i - 1] > data_[i]) sum_d += data_[i - 1] - data_[i];
+                                        if(num_element > max_period) break;
+                                        if(num_element >= min_period) {
+                                                num_element++;
+                                                T u = sum_u /(T)num_element;
+                                                T d = sum_d /(T)num_element;
+                                                if(d == 0) rsi_data.push_back(100.0);
+                                                else rsi_data.push_back(((T)100.0 - ((T)100.0 / ((T)1.0 + (u / d)))));
+                                                min_period += step_period;
+                                        } else {
+                                                num_element++;
+                                        }
+                                } // for i
                         }
                 }
 
                 /** \brief Получить стандартное отклонение буфера
                  * \param out стандартное отклонение
+                 * \param offset смещение в массиве
                  */
-                void get_std_data(T &out)
+                void get_std_data(T &out, size_t offset = 0)
                 {
                         if(is_test_) {
-                                T ml = std::accumulate(data_test_.begin(), data_test_.end(), T(0));
-                                ml /= (T)data_test_.size();
+                                T ml = std::accumulate(data_test_.begin() + offset, data_test_.end(), T(0));
+                                ml /= (T)(data_test_.size() - offset);
                                 T sum = 0;
-                                for (size_t i = 0; i < data_test_.size(); i++) {
+                                for (size_t i = offset; i < data_test_.size(); i++) {
                                         T diff = (data_test_[i] - ml);
                                         sum +=  diff * diff;
                                 }
-                                out = std::sqrt(sum / (T)(data_test_.size() - 1));
+                                out = std::sqrt(sum / (T)(data_test_.size() - offset - 1));
                         } else {
-                                T ml = std::accumulate(data_.begin(), data_.end(), T(0));
-                                ml /= (T)data_.size();
+                                T ml = std::accumulate(data_.begin() + offset, data_.end(), T(0));
+                                ml /= (T)(data_.size() - offset);
                                 T sum = 0;
-                                for (size_t i = 0; i < data_.size(); i++) {
+                                for (size_t i = offset; i < data_.size(); i++) {
                                         T diff = (data_[i] - ml);
                                         sum +=  diff * diff;
                                 }
-                                out = std::sqrt(sum / (T)(data_.size() - 1));
+                                out = std::sqrt(sum / (T)(data_.size() - offset - 1));
                         }
                 }
 
@@ -527,13 +796,14 @@ namespace IndicatorsEasy
         /** \brief Класс фильтра низкой частоты
          */
         template <typename T>
-        class LowPassFilter
+        class LowPassFilter : BaseIndicator<T>
         {
         private:
                 T alfa_;
                 T beta_;
                 T prev_;
                 T tranTime;
+                bool is_update_ = false;
                 bool is_init_ = false;
         public:
 
@@ -548,6 +818,7 @@ namespace IndicatorsEasy
                         T Ntay = std::log(1.0 / error_signal);
                         alfa_ = std::exp(-Ntay / N);
                         beta_ = 1.0 - alfa_;
+                        is_init_ = true;
                 }
 
                 /** \brief Получить новые данные индикатора
@@ -556,9 +827,12 @@ namespace IndicatorsEasy
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
                  */
                 int update(T in, T &out) {
-                        if (!is_init_) {
+                        if(!is_init_) {
+                                return NO_INIT;
+                        }
+                        if (!is_update_) {
                                 prev_ = in;
-                                is_init_ = true;
+                                is_update_ = true;
                                 out = 0;
                                 return INDICATOR_NOT_READY_TO_WORK;
                         }
@@ -574,6 +848,9 @@ namespace IndicatorsEasy
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
                  */
                 int test(T in, T &out) {
+                        if(!is_init_) {
+                                return NO_INIT;
+                        }
                         if (!is_init_) {
                                 out = 0;
                                 return INDICATOR_NOT_READY_TO_WORK;
@@ -586,41 +863,97 @@ namespace IndicatorsEasy
                  */
                 void clear()
                 {
-                        is_init_ = false;
+                        is_update_ = false;
                 }
         };
 //------------------------------------------------------------------------------
         /** \brief Индекс относительной силы
          */
         template <typename T, class INDICATOR_TYPE>
-        class RSI
+        class RSI : BaseIndicator<T>
         {
         private:
                 INDICATOR_TYPE iU;
                 INDICATOR_TYPE iD;
                 bool is_init_ = false;
+                bool is_update_ = false;
                 T prev_;
         public:
+                RSI() {}
 
                 /** \brief Инициализировать индикатор индекса относительной силы
                  * \param period период индикатора
                  */
                 RSI(int period) : iU(period), iD(period)
                 {
+                        is_init_ = true;
+                }
 
+                /** \brief Инициализировать индикатор индекса относительной силы
+                 * \param period период индикатора
+                 */
+                void init(int period) {
+                        is_init_ = true;
+                        is_update_ = false;
+                        iU = INDICATOR_TYPE(period);
+                        iD = INDICATOR_TYPE(period);
                 }
 
                 /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
-                 * \param out массив на выходе
+                 * \param out сигнал на выходе
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
                  */
                 int update(T in, T &out)
                 {
                         if(!is_init_) {
+                                return NO_INIT;
+                        }
+                        if(!is_update_) {
                                 prev_ = in;
-                                is_init_ = true;
+                                is_update_ = true;
                                 out = 50.0;
+                                return INDICATOR_NOT_READY_TO_WORK;
+                        }
+                        T u = 0;
+                        T d = 0;
+                        if(prev_ < in) {
+                                u = in - prev_;
+                        } else
+                        if(prev_ > in) {
+                                d = prev_ - in;
+                        }
+                        int erru, errd = 0;
+                        T mu = 0;
+                        T md = 0;
+                        erru = iU.update(u, mu);
+                        errd = iD.update(d, md);
+                        prev_ = in;
+                        if(erru != OK || errd != OK) {
+                                out = 50.0;
+                                return INDICATOR_NOT_READY_TO_WORK;
+                        }
+                        if(md == 0) {
+                                out = 100.0;
+                                return OK;
+                        }
+                        T rs = mu / md;
+                        out = 100.0 - (100.0 / (1.0 + rs));
+                        return OK;
+                }
+
+                /** \brief Обновить состояние индикатора
+                 * \param in сигнал на входе
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int update(T in)
+                {
+                        if(!is_init_) {
+                                return NO_INIT;
+                        }
+                        if(!is_update_) {
+                                prev_ = in;
+                                is_update_ = true;
                                 return INDICATOR_NOT_READY_TO_WORK;
                         }
                         T u = 0, d = 0;
@@ -635,15 +968,8 @@ namespace IndicatorsEasy
                         errd = iD.update(d, d);
                         prev_ = in;
                         if(erru != OK || errd != OK) {
-                                out = 50.0;
                                 return INDICATOR_NOT_READY_TO_WORK;
                         }
-                        if(d == 0) {
-                                out = 100.0;
-                                return OK;
-                        }
-                        T rs = u / d;
-                        out = 100.0 - (100.0 / (1.0 + rs));
                         return OK;
                 }
 
@@ -656,6 +982,9 @@ namespace IndicatorsEasy
                 int test(T in, T &out)
                 {
                         if(!is_init_) {
+                                return NO_INIT;
+                        }
+                        if(!is_update_) {
                                 out = 50.0;
                                 return INDICATOR_NOT_READY_TO_WORK;
                         }
@@ -686,34 +1015,48 @@ namespace IndicatorsEasy
                  */
                 void clear()
                 {
-                        is_init_ = false;
+                        is_update_ = false;
                 }
         };
 //------------------------------------------------------------------------------
         /** \brief Линии Боллинджера
          */
         template <typename T>
-        class BollingerBands
+        class BollingerBands : BaseIndicator<T>
         {
         private:
                 std::vector<T> data_;
                 int period_ = 0;
                 T d_;
         public:
+                BollingerBands() {};
 
                 /** \brief Инициализация линий Боллинджера
                  * \param period период  индикатора
-                 * \param d множитель стандартного отклонения
+                 * \param factor множитель стандартного отклонения
                  */
-                BollingerBands(int period, T d)
+                BollingerBands(int period, T factor)
                 {
                         period_ = period;
-                        d_ = d;
+                        d_ = factor;
+                }
+
+                /** \brief Инициализация линий Боллинджера
+                 * \param period период  индикатора
+                 * \param factor множитель стандартного отклонения
+                 */
+                void init(int period, T factor)
+                {
+                        period_ = period;
+                        d_ = factor;
+                        data_.clear();
                 }
 
                 /** \brief Обновить состояние индикатора
                  * \param in сигнал на входе
-                 * \param out массив на выходе
+                 * \param tl верхняя полоса боллинджера
+                 * \param ml среняя полоса боллинджера
+                 * \param bl нижняя полоса боллинджера
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
                  */
                 int update(T in, T &tl, T &ml, T &bl)
@@ -749,10 +1092,68 @@ namespace IndicatorsEasy
                         return OK;
                 }
 
+                /** \brief Обновить состояние индикатора
+                 * \param in сигнал на входе
+                 * \param ml среняя полоса боллинджера
+                 * \param std_dev стандартное отклонение
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int update(T in, T &ml, T &std_dev)
+                {
+                        if(period_ == 0) {
+                                ml = 0;
+                                std_dev = 0;
+                                return NO_INIT;
+                        }
+                        if(data_.size() < (size_t)period_) {
+                                data_.push_back(in);
+                                if(data_.size() != (size_t)period_) {
+                                        ml = 0;
+                                        std_dev = 0;
+                                        return INDICATOR_NOT_READY_TO_WORK;
+                                }
+                        } else {
+                                data_.push_back(in);
+                                data_.erase(data_.begin());
+                        }
+                        ml = std::accumulate(data_.begin(), data_.end(), T(0));
+                        ml /= (T)period_;
+                        T sum = 0;
+                        for (int i = 0; i < period_; i++) {
+                                T diff = (data_[i] - ml);
+                                sum +=  diff * diff;
+                        }
+                        std_dev = std::sqrt(sum / (T)(period_ - 1));
+                        return OK;
+                }
+
+                /** \brief Обновить состояние индикатора
+                 * \param in сигнал на входе
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int update(T in)
+                {
+                        if(period_ == 0) {
+                                return NO_INIT;
+                        }
+                        if(data_.size() < (size_t)period_) {
+                                data_.push_back(in);
+                                if(data_.size() != (size_t)period_) {
+                                        return INDICATOR_NOT_READY_TO_WORK;
+                                }
+                        } else {
+                                data_.push_back(in);
+                                data_.erase(data_.begin());
+                        }
+                        return OK;
+                }
+
                 /** \brief Протестировать индикатор
                  * Данная функция отличается от update тем, что не влияет на внутреннее состояние индикатора
                  * \param in сигнал на входе
-                 * \param out сигнал на выходе
+                 * \param tl верхняя полоса боллинджера
+                 * \param ml среняя полоса боллинджера
+                 * \param bl нижняя полоса боллинджера
                  * \return вернет 0 в случае успеха, иначе см. ErrorType
                  */
                 int test(T in, T &tl, T &ml, T &bl)
@@ -789,6 +1190,43 @@ namespace IndicatorsEasy
                         return OK;
                 }
 
+                /** \brief Протестировать индикатор
+                 * Данная функция отличается от update тем, что не влияет на внутреннее состояние индикатора
+                 * \param in сигнал на входе
+                 * \param ml среняя полоса боллинджера
+                 * \param std_dev стандартное отклонение
+                 * \return вернет 0 в случае успеха, иначе см. ErrorType
+                 */
+                int test(T in, T &ml, T &std_dev)
+                {
+                        if(period_ == 0) {
+                                ml = 0;
+                                std_dev = 0;
+                                return NO_INIT;
+                        }
+                        std::vector<T> data_test = data_;
+                        if(data_test.size() < (size_t)period_) {
+                                data_test.push_back(in);
+                                if(data_test.size() != (size_t)period_) {
+                                        ml = 0;
+                                        std_dev = 0;
+                                        return INDICATOR_NOT_READY_TO_WORK;
+                                }
+                        } else {
+                                data_test.push_back(in);
+                                data_test.erase(data_test.begin());
+                        }
+                        ml = std::accumulate(data_test.begin(), data_test.end(), T(0));
+                        ml /= (T)period_;
+                        T sum = 0;
+                        for (int i = 0; i < period_; i++) {
+                                T diff = (data_test[i] - ml);
+                                sum +=  diff * diff;
+                        }
+                        std_dev = std::sqrt(sum / (T)(period_ - 1));
+                        return OK;
+                }
+
                 /** \brief Очистить данные индикатора
                  */
                 void clear()
@@ -800,17 +1238,20 @@ namespace IndicatorsEasy
         /** \brief Средняя скорость
          */
         template <typename T>
-        class AverageSpeed
+        class AverageSpeed : BaseIndicator<T>
         {
         private:
                 MW<T> iMW;
+                bool is_init_ = false;
         public:
+                AverageSpeed() {};
+
                 /** \brief Инициализировать класс индикатора
                  * \param period период индикатора
                  */
                 AverageSpeed(int period) : iMW(period + 1)
                 {
-
+                        is_init_ = true;
                 }
 
                 /** \brief Обновить состояние индикатора
@@ -820,6 +1261,9 @@ namespace IndicatorsEasy
                  */
                 int update(T in, T &out)
                 {
+                        if(!is_init_) {
+                                return NO_INIT;
+                        }
                         std::vector<T> mw_out;
                         int err = iMW.update(in, mw_out);
                         if(err == OK) {
@@ -839,6 +1283,9 @@ namespace IndicatorsEasy
                  */
                 int test(T in, T &out)
                 {
+                        if(!is_init_) {
+                                return NO_INIT;
+                        }
                         std::vector<T> mw_out;
                         int err = iMW.test(in, mw_out);
                         if(err == OK) {

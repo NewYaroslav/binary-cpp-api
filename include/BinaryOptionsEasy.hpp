@@ -75,7 +75,6 @@ namespace BinaryOptionsEasy
          */
         double calc_min_strategy_eff(double profit, double loss = 1.0)
         {
-                // profit * eff - (1.0 - eff) *  loss
                 return loss/(profit + loss);
         }
 //------------------------------------------------------------------------------
@@ -115,6 +114,49 @@ namespace BinaryOptionsEasy
                 }
                 sum /= (double)(array_depo.size() - 1);
                 return sum;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Посчитать среднюю геометрическую доходность
+         * Первый элемент массива должен быть начальным уровнем депозита (депозит до первой сделки)
+         * Данный вариант функции пригоден для экспоненциального роста депозита
+         * \param array_depo массив депозита
+         * \return средняя геометрическая доходность
+         */
+        template<typename T>
+        double calc_average_geometric_yield(std::vector<T> &array_depo)
+        {
+                if(array_depo.size() < 1) return 0;
+                double mx = 1.0;
+                for(size_t i = 1; i < array_depo.size(); i++) {
+                        double ri = array_depo[i - 1] > 0 ? 1.0 + ((T)(array_depo[i] - array_depo[i - 1]) / (T)array_depo[i - 1]) : 0;
+                        //double ri = vMoney[i - 1] > 0 ? ((double)vMoney[i] / (double)vMoney[i - 1]) : 0;
+                        mx *= ri;
+                }
+                return mx;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Посчитать коэффициент Шарпа
+         * Первый элемент массива должен быть начальным уровнем депозита (депозит до первой сделки)
+         * Данный вариант функции пригоден для экспоненциального роста депозита
+         * \param array_depo массив депозита
+         * \return коэффициент Шарпа
+         */
+        template<typename T>
+        double calc_coeff_sharpe(std::vector<T> &array_depo)
+        {
+                double re = calc_average_geometric_yield(array_depo);
+                if(re == 0) return 0;
+                T sum = 0;
+                for(size_t i = 1; i < array_depo.size(); i++) {
+                        T ri = array_depo[i - 1] > 0 ? 1.0 + ((T)(array_depo[i] - array_depo[i - 1]) / (T)array_depo[i - 1]) : 0;
+                        T diff = ri - re;
+                        sum += diff * diff;
+                }
+                if(sum == 0) return 0;
+                // так как в вычислениях первый элемент - начальный уровень депозита, то array_depo.size() - 2
+                T sigma = (1.0 / (T)(array_depo.size() - 2)) * std::sqrt(sum);
+                //return sqrt((double)vMoney.size())*(re/sigma);
+                return (re / sigma);
         }
 //------------------------------------------------------------------------------
         /** \brief Класс для хранения данных одного бинарного опциона
