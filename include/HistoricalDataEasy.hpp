@@ -26,6 +26,7 @@
 //------------------------------------------------------------------------------
 #include "ZstdEasy.hpp"
 #include "BinaryApiEasy.hpp"
+#include "BinaryApiCommon.hpp"
 //------------------------------------------------------------------------------
 #define HISTORICALDATAEASY_USE_THREAD 0
 
@@ -35,32 +36,7 @@
 //------------------------------------------------------------------------------
 namespace HistoricalDataEasy
 {
-//------------------------------------------------------------------------------
-        /// Набор возможных состояний ошибки
-        enum ErrorType {
-                OK = 0,                         ///< Ошибки нет, все в порядке
-                NO_INIT = -4,                   ///< Не было инициализации перед использованием метода
-                INVALID_PARAMETER = -6,         ///< Параметр имеет недопустимое значение
-                DATA_NOT_AVAILABLE = -7,        ///< Данные не доступны (их нет)
-                NO_TIMESTAMP = - 14,            ///< Нет временной метки (данные не содержат цен с требуемой временной меткой)
-        };
-//------------------------------------------------------------------------------
-        /// Типы контрактов
-        enum ContractType {
-                NO_CONTRACT = 0,                ///< Нет контрактов
-                BUY = 1,                        ///< Ставка на повышение
-                SELL = -1,                      ///< Ставка на понижение
-        };
-//------------------------------------------------------------------------------
-        /// Типы состояний
-        enum StateType {
-                WIN = 1,                        ///< Опцион завершился удачно
-                NEUTRAL = 0,                    ///< Опцион завершился в ничью
-                LOSS = -1,                      ///< Опцион был не верно спрогнозирован
-                END_OF_DATA = 2,                ///< Конец данных
-                SKIPPING_DATA = -2,             ///< Пропуск данных (нет цен за указанный период)
-                NORMAL_DATA = 0,                ///< Нормальный доступ к данным
-        };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Класс для удобного использования исторических данных
          */
@@ -129,7 +105,7 @@ namespace HistoricalDataEasy
                         }
                         if(err == OK && _times.size() > 0) {
                                 // добавляем проверку адекватности времени
-                                if(_times.back() - _times[0] > xtime::SEC_DAY) {
+                                if(_times.back() - _times[0] > xtime::SECONDS_IN_DAY) {
                                         std::cout << "file error: " << file_name << std::endl;
                                         std::cout << "_times size " << _times.size() << std::endl;
                                         std::cout << "_times[0] " << _times[0] << std::endl;
@@ -313,20 +289,20 @@ namespace HistoricalDataEasy
                                                 return DATA_NOT_AVAILABLE;
                                         } else
                                         if(t1 >= times[0] && t2 > times.back()) {
-                                                int err = add_data_from_file(times.back() + xtime::SEC_DAY);
+                                                int err = add_data_from_file(times.back() + xtime::SECONDS_IN_DAY);
                                                 if(err != OK)
                                                         return err;
                                         } else
                                         if(t1 < times[0] && t2 <= times.back()) {
-                                                int err = add_data_from_file(times[0] - xtime::SEC_DAY);
+                                                int err = add_data_from_file(times[0] - xtime::SECONDS_IN_DAY);
                                                 if(err != OK)
                                                         return err;
                                         } else
                                         if(t1 < times[0] && t2 > times.back()) {
-                                                int err = add_data_from_file(times[0] - xtime::SEC_DAY);
+                                                int err = add_data_from_file(times[0] - xtime::SECONDS_IN_DAY);
                                                 if(err != OK)
                                                         return err;
-                                                err = add_data_from_file(times.back() + xtime::SEC_DAY);
+                                                err = add_data_from_file(times.back() + xtime::SECONDS_IN_DAY);
                                                 if(err != OK)
                                                         return err;
                                         } // if
@@ -379,7 +355,7 @@ namespace HistoricalDataEasy
                                 return INVALID_PARAMETER;
                         int err = 0;
                         bool is_error = true;
-                        for(unsigned long long t = beg_timestamp; t <= end_timestamp; t += xtime::SEC_DAY) {
+                        for(unsigned long long t = beg_timestamp; t <= end_timestamp; t += xtime::SECONDS_IN_DAY) {
                                 err = add_data_from_file(t);
                                 if(err == OK) {
                                         is_error = false;

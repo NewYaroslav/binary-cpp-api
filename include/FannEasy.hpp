@@ -28,17 +28,11 @@
 #include "fann.h"
 #include "floatfann.h"
 #include <vector>
+#include "BinaryApiCommon.hpp"
 //------------------------------------------------------------------------------
 namespace FannEasy
 {
-//------------------------------------------------------------------------------
-                enum ErrorType {
-                        OK = 0,
-                        NO_INIT = -4,
-                        INVALID_PARAMETER = -6,
-                        DATA_NOT_AVAILABLE = -7,
-                        NO_TIMESTAMP = - 14,
-                };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Зарезервировать память для двумерного массива
          * \param x количество строк

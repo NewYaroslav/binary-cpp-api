@@ -1214,7 +1214,7 @@ public:
                                 break;
                         }
                         // чтобы один и тот же момент времени не встречался дважды
-                        epoch = _endepoch + xtime::SEC_MINUTE;
+                        epoch = _endepoch + xtime::SECONDS_IN_MINUTE;
                 } // while
                 return OK;
         }

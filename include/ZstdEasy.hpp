@@ -34,24 +34,11 @@
 #include "BinaryAPI.hpp"
 #include "BinaryApiEasy.hpp"
 #endif
+#include "BinaryApiCommon.hpp"
 //------------------------------------------------------------------------------
 namespace ZstdEasy
 {
-//------------------------------------------------------------------------------
-        /// Набор возможных состояний ошибки
-        enum ErrorType {
-                OK = 0,
-                NOT_OPEN_FILE = -9,
-                NOT_WRITE_FILE = -10,
-                NOT_COMPRESS_FILE = -11,
-                NOT_DECOMPRESS_FILE = -12,
-                DATA_SIZE_ERROR = -13,
-        };
-//------------------------------------------------------------------------------
-        enum QuotesType {
-                QUOTES_TICKS = 0,
-                QUOTES_BARS = 1,
-        };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Тренируйте словарь из массива образцов
         * \param path путь к файлам
@@ -481,10 +468,10 @@ namespace ZstdEasy
                 bf::create_directory(path);
                 xtime::DateTime iTime(timestamp);
                 iTime.hour = iTime.seconds = iTime.minutes = 0;
-                unsigned long long stop_time = iTime.get_timestamp() - xtime::SEC_DAY;
+                unsigned long long stop_time = iTime.get_timestamp() - xtime::SECONDS_IN_DAY;
                 if(is_skip_day_off) {
                         while(xtime::is_day_off(stop_time)) {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                         }
                 }
                 int err = BinaryAPI::OK;
@@ -497,12 +484,12 @@ namespace ZstdEasy
 
                         if(bf::check_file(file_name)) {
                                 if(is_skip_day_off) {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                         while(xtime::is_day_off(stop_time)) {
-                                                stop_time -= xtime::SEC_DAY;
+                                                stop_time -= xtime::SECONDS_IN_DAY;
                                         }
                                 } else {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                 }
                                 continue;
                         }
@@ -517,7 +504,7 @@ namespace ZstdEasy
                                         _prices,
                                         _times,
                                         stop_time,
-                                        stop_time + xtime::SEC_DAY - 1);
+                                        stop_time + xtime::SECONDS_IN_DAY - 1);
                         } else
                         if(type == QUOTES_TICKS) {
                                 err = api.get_ticks_without_limits(
@@ -525,15 +512,15 @@ namespace ZstdEasy
                                         _prices,
                                         _times,
                                         stop_time,
-                                        stop_time + xtime::SEC_DAY - 1);
+                                        stop_time + xtime::SECONDS_IN_DAY - 1);
                         }
                         if(is_skip_day_off) {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                                 while(xtime::is_day_off(stop_time)) {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                 }
                         } else {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                         }
                         if(err == BinaryAPI::OK && _times.size() > 0) { // данные получены
                                 //std::cout << "write_binary_quotes_file: " << file_name << " " << xtime::get_str_unix_date_time(_times.back()) << std::endl;

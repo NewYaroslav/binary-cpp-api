@@ -26,35 +26,12 @@
 //------------------------------------------------------------------------------
 #include <queue>
 #include <vector>
+#include <limits>
 #include <cmath>
 //------------------------------------------------------------------------------
 namespace BinaryOptionsEasy
 {
-//------------------------------------------------------------------------------
-        // варианты ошибок API
-        enum ErrorType {
-                OK = 0,
-                NO_AUTHORIZATION = -1,
-                NO_COMMAND = -2,
-                UNKNOWN_ERROR = -3,
-                NO_INIT = -4,
-                INVALID_PARAMETER = -6,
-                DATA_NOT_AVAILABLE = -7,
-        };
-//------------------------------------------------------------------------------
-        // типы контрактов
-        enum ContractType {
-                BUY = 1,
-                SELL = -1,
-                UP = 1,
-                DN = -1,
-        };
-//------------------------------------------------------------------------------
-        // состояния опционов
-        enum OptionStatus {
-                WIN = 1,
-                LOSS = -1,
-        };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Посчитать математическое ожидание прибыли
          * \param eff эффективность стратегии (от 0 до 1.0)
@@ -90,6 +67,28 @@ namespace BinaryOptionsEasy
                 if(eff <= calc_min_strategy_eff(profit))
                         return 0.0;
                 return attenuation * (((profit + 1.0) * eff - 1.0) / profit);
+        }
+//------------------------------------------------------------------------------
+        /** \brief Посчитать коэффициент успешности торговли (аналог коэфифицент Шарпа)
+         * Чем коэффициент меньше, тем лучше. При коэффииценте памяти 0.7 хорошее значение -1,
+         * При коэффициенте памяти 0.95 хорошее значение -4.
+         * \param profit профит за разные периоды в хронологическом порядке
+         * \param memory_coefficient коэффициент памяти
+         * \return коэффициент успешности торговли
+         */
+        template<typename T>
+        double calc_performance_indicator(std::vector<T> &profit, double memory_coefficient = 0.7)
+        {
+                double mem_profit = 0.0;
+                double sum_mem_profit = 0.0;
+                double sum_profit = 0.0;
+                for(size_t i = 0; i < profit.size(); ++i) {
+                        mem_profit = std::min((double)(mem_profit * memory_coefficient + profit[i]), 0.0d);
+                        sum_mem_profit += mem_profit;
+                        sum_profit += profit[i];
+                } // for i
+                if(sum_profit <= 0.0) return std::numeric_limits<double>::lowest();
+                return sum_mem_profit / sum_profit;
         }
 //------------------------------------------------------------------------------
         /** \brief Посчитать стабильность прибыли
@@ -297,7 +296,7 @@ namespace BinaryOptionsEasy
                 int num_wins = 0;                       /**< Количество удачрых сделок */
                 int num_losses = 0;                     /**< Количество неудачных сделок */
                 int num_deals = 0;                      /**< Количество сделок */
-                std::vector<float> array_depo;         /**< Массив изменения депозита */
+                std::vector<float> array_depo;          /**< Массив изменения депозита */
                 TestDataOut() {};
 
                 /** \brief Очистить данные
@@ -654,8 +653,80 @@ namespace BinaryOptionsEasy
                 {
                         deals.clear();
                 }
+        };
 //------------------------------------------------------------------------------
+        /** \brief Класс "Простой Трейдер"
+         * Данный класс можно использовать в оптимизаторах торговли
+         */
+        class SimpleTrader {
+        public:
+                int wins = 0;                   /**< Число успешных сделок, о да я успешен! */
+                int losses = 0;                 /**< Число убыточных сделок :((( */
+                std::vector<double> depo;       /**< Кривая баланса депозита */
+                double start_depo = 1.0;        /**< Начальный депозито */
+                double stop_depo = 1.0;         /**< Конечный депозит */
+                double max_depo = 1.0;          /**< Максимальный депозит */
+                double min_depo = 1.0;          /**< Минимальный депозит */
+                double dropdown = 0.0;      /**< Максимальная просадка */
+
+                SimpleTrader() {};
+
+                /** \brief Добавить удачную сделку
+                 * \param profit выплата брокера
+                 * \param rate ставка от депозита от 0 до 1
+                 */
+                void add_win(double profit, double rate) {
+                        if(depo.size() == 0) {
+                                // если это только начало, запишем стартовый депозит
+                                depo.push_back(start_depo);
+                        }
+                        // найдем депозит на текущий момент
+                        stop_depo = depo.back() + depo.back() * rate * profit;
+                        // обновим максимум депозита
+                        if(stop_depo > max_depo) max_depo = stop_depo;
+                        // добавим размер депозита в массив изменений депозита
+                        depo.push_back(stop_depo);
+                        wins++;
+                }
+
+                /** \brief Добавить убыточную сделку
+                 * \param rate ставка от депозита от 0 до 1
+                 */
+                void add_loss(double rate) {
+                        if(depo.size() == 0) {
+                                // если это только начало, запишем стартовый депозит
+                                depo.push_back(start_depo);
+                        }
+                        // найдем депозит на текущий момент
+                        double loss = depo.back() * rate;
+                        stop_depo = depo.back() - loss;
+                        // обновим минимум депозита
+                        if(stop_depo < min_depo) min_depo = stop_depo;
+                        // обновим
+                        double ampl_dropdown = max_depo - stop_depo;
+                        if(dropdown > dropdown) dropdown = ampl_dropdown;
+                        depo.push_back(stop_depo);
+                        losses++;
+                }
+
+                int get_deals() {
+                        return wins + losses;
+                }
+
+                /** \brief Получить эффективность
+                 * \return винрейт от 0 до 1.0
+                 */
+                double get_eff() {
+                        int sum = get_deals();
+                        return sum == 0 ? 0.0 : ((double)wins/(double)sum);
+                }
+
+                double get_profit() {
+
+                }
         };
 }
+//------------------------------------------------------------------------------
+
 //------------------------------------------------------------------------------
 #endif // BINARYOPTIONSEASY_HPP_INCLUDED

@@ -31,19 +31,13 @@
 #include <CorrelationEasy.hpp>
 #include <NormalizationEasy.hpp>
 #include <AlgorithmsEasy.hpp>
+#include "BinaryApiCommon.hpp"
 
 #define INDICATORSEASY_DEF_RING_BUFFER_SIZE 64
 //------------------------------------------------------------------------------
 namespace IndicatorsEasy
 {
-//------------------------------------------------------------------------------
-        /// Набор возможных состояний ошибки
-        enum ErrorType {
-                OK = 0,                             ///< Ошибок нет, все в порядке
-                NO_INIT = -4,                       ///< Нет инициализации
-                INVALID_PARAMETER = -6,             ///< Неверный параметр
-                INDICATOR_NOT_READY_TO_WORK = -16,
-        };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Посчитать простую скользящую среднюю (SMA)
          * Данная функция для расчетов использует последние N = period значений
@@ -242,9 +236,9 @@ namespace IndicatorsEasy
                                 return NO_INIT;
                         }
                         RingBuffer<T, SIZE> _data = data_;
-                        if(_data.count() < (size_t)period_) {
+                        if(_data.count() < period_) {
                                 _data.push(in);
-                                if(_data.count() == (size_t)period_) {
+                                if(_data.count() == period_) {
                                         //T sum = std::accumulate(_data.data.begin(), _data.data.end(), T(0));
                                         T sum = _data.get_sum();
                                         out = sum / (T)period_;

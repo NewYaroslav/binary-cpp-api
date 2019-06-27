@@ -23,27 +23,14 @@
 */
 #ifndef BINARYAPIEASY_HPP_INCLUDED
 #define BINARYAPIEASY_HPP_INCLUDED
-
+//------------------------------------------------------------------------------
 #include "BinaryApi.hpp"
+#include "BinaryApiCommon.hpp"
 #include "banana_filesystem.hpp"
 //------------------------------------------------------------------------------
 namespace BinaryApiEasy
 {
-//------------------------------------------------------------------------------
-        /// Набор возможных состояний ошибки
-        enum ErrorType {
-                OK = 0,                         ///< Ошибок нет, все в порядке
-                UNKNOWN_ERROR = -3,             ///< Неопределенная ошибка
-                INVALID_PARAMETER = -6,         ///< Один из параметров неверно указан
-                DATA_NOT_AVAILABLE = -7,        ///< Данные не доступны
-                NOT_ALL_DATA_DOWNLOADED = -8,
-                FILE_CANNOT_OPENED = -15,       ///< Файл не может быть открыт
-        };
-//------------------------------------------------------------------------------
-        enum QuotesType {
-                QUOTES_TICKS = 0,               ///< Котировки тиков
-                QUOTES_BARS = 1,                ///< Котировки баров
-        };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Получить список символов
          * \return список валютных пар и индексов
@@ -155,10 +142,10 @@ namespace BinaryApiEasy
         {
                 xtime::DateTime iTime(timestamp);
                 iTime.hour = iTime.seconds = iTime.minutes = 0;
-                unsigned long long stop_time = iTime.get_timestamp() - xtime::SEC_DAY;
+                unsigned long long stop_time = iTime.get_timestamp() - xtime::SECONDS_IN_DAY;
                 if(is_skip_day_off) {
                         while(xtime::is_day_off(stop_time)) {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                         }
                 }
                 prices.resize(num_days);
@@ -174,7 +161,7 @@ namespace BinaryApiEasy
                                         _prices,
                                         _times,
                                         stop_time,
-                                        stop_time + xtime::SEC_DAY - 1);
+                                        stop_time + xtime::SECONDS_IN_DAY - 1);
                         } else
                         if(type == QUOTES_TICKS) {
                                 err = api.get_ticks_without_limits(
@@ -182,15 +169,15 @@ namespace BinaryApiEasy
                                         _prices,
                                         _times,
                                         stop_time,
-                                        stop_time + xtime::SEC_DAY - 1);
+                                        stop_time + xtime::SECONDS_IN_DAY - 1);
                         }
                         if(is_skip_day_off) {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                                 while(xtime::is_day_off(stop_time)) {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                 }
                         } else {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                         }
                         if(err == BinaryAPI::OK) {
                                 size_t indx = num_days - 1 - i;
@@ -349,10 +336,10 @@ namespace BinaryApiEasy
                 bf::create_directory(path);
                 xtime::DateTime iTime(timestamp);
                 iTime.hour = iTime.seconds = iTime.minutes = 0;
-                unsigned long long stop_time = iTime.get_timestamp() - xtime::SEC_DAY;
+                unsigned long long stop_time = iTime.get_timestamp() - xtime::SECONDS_IN_DAY;
                 if(is_skip_day_off) {
                         while(xtime::is_day_off(stop_time)) {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                         }
                 }
                 int err = BinaryAPI::OK;
@@ -365,12 +352,12 @@ namespace BinaryApiEasy
 
                         if(bf::check_file(file_name)) {
                                 if(is_skip_day_off) {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                         while(xtime::is_day_off(stop_time)) {
-                                                stop_time -= xtime::SEC_DAY;
+                                                stop_time -= xtime::SECONDS_IN_DAY;
                                         }
                                 } else {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                 }
                                 continue;
                         }
@@ -385,7 +372,7 @@ namespace BinaryApiEasy
                                         _prices,
                                         _times,
                                         stop_time,
-                                        stop_time + xtime::SEC_DAY - 1);
+                                        stop_time + xtime::SECONDS_IN_DAY - 1);
                         } else
                         if(type == QUOTES_TICKS) {
                                 err = api.get_ticks_without_limits(
@@ -393,15 +380,15 @@ namespace BinaryApiEasy
                                         _prices,
                                         _times,
                                         stop_time,
-                                        stop_time + xtime::SEC_DAY - 1);
+                                        stop_time + xtime::SECONDS_IN_DAY - 1);
                         }
                         if(is_skip_day_off) {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                                 while(xtime::is_day_off(stop_time)) {
-                                        stop_time -= xtime::SEC_DAY;
+                                        stop_time -= xtime::SECONDS_IN_DAY;
                                 }
                         } else {
-                                stop_time -= xtime::SEC_DAY;
+                                stop_time -= xtime::SECONDS_IN_DAY;
                         }
                         if(err == BinaryAPI::OK && _times.size() > 0) { // данные получены
                                 //std::cout << "write_binary_quotes_file: " << file_name << " " << xtime::get_str_unix_date_time(_times.back()) << std::endl;
@@ -545,7 +532,7 @@ namespace BinaryApiEasy
 
                 xtime::DateTime iRealTime(real_timestamp);
                 iRealTime.set_beg_day();
-                unsigned long long timestamp = iRealTime.get_timestamp() - xtime::SEC_DAY;
+                unsigned long long timestamp = iRealTime.get_timestamp() - xtime::SECONDS_IN_DAY;
 
                 beg_timestamp = std::numeric_limits<unsigned long long>::max();
                 end_timestamp = std::numeric_limits<unsigned long long>::min();
@@ -556,7 +543,7 @@ namespace BinaryApiEasy
                         if(!is_use_day_off) { // пропускаем выходной день
                                 int wday = xtime::get_weekday(timestamp);
                                 if(wday == xtime::SUN || wday == xtime::SAT) {
-                                    timestamp -= xtime::SEC_DAY;
+                                    timestamp -= xtime::SECONDS_IN_DAY;
                                     continue;
                                 }
                         }
@@ -570,7 +557,7 @@ namespace BinaryApiEasy
                                         beg_timestamp = timestamp;
                                         return OK;
                                 }
-                                timestamp -= xtime::SEC_DAY;
+                                timestamp -= xtime::SECONDS_IN_DAY;
                         } else {
                                 err_days++;
                                 if(err_days == MAX_ERR_DAYS) return DATA_NOT_AVAILABLE;

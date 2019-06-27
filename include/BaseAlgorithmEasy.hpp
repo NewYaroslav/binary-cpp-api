@@ -26,21 +26,11 @@
 //------------------------------------------------------------------------------
 #include "HistoricalDataEasy.hpp"
 #include "BasePayoutModelEasy.hpp"
+#include "BinaryApiCommon.hpp"
 //------------------------------------------------------------------------------
 namespace BaseAlgorithmEasy
 {
-//------------------------------------------------------------------------------
-        enum ErrorType {
-                OK = 0,                 ///< Ошибок нет
-                INVALID_PARAMETER = -6, ///< Неверно задан параметр
-                DATA_NOT_AVAILABLE = -7,///< Данные не доступны
-        };
-//------------------------------------------------------------------------------
-        enum ForecastType {
-                UP = 1,                 ///< Прогноз на ставку вверх (BUY)
-                DN = -1,                ///< Прогноз на ставку вниз  (SELL)
-                NO_FORECAST = 0,        ///< Нет прогноза
-        };
+        using namespace BinaryApiCommon;
 //------------------------------------------------------------------------------
         /** \brief Класс для построения алгоритмов торговли
          */
@@ -101,7 +91,7 @@ namespace BaseAlgorithmEasy
         class SimpleBbRobot : public BigFatherRobots {
                 private:
                 std::vector<IndicatorsEasy::BollingerBands<double>> iBB;
-                int duration_ = xtime::SEC_MINUTE * 3;
+                int duration_ = xtime::SECONDS_IN_MINUTE * 3;
                 int delay_before_work_ = 0;
                 const int bot_id_ = 0;
                 public:
@@ -119,7 +109,7 @@ namespace BaseAlgorithmEasy
                                 iBB[i] = IndicatorsEasy::BollingerBands<double>(periods[i], std_factors[i]);
                                 delay_before_work_ = std::max(delay_before_work_, periods[i]);
                         }
-                        delay_before_work_ *= xtime::SEC_MINUTE;
+                        delay_before_work_ *= xtime::SECONDS_IN_MINUTE;
                 };
 
                 /** \brief Сбросить состояния индикаторов
