@@ -73,6 +73,7 @@ public:
                 DAYS = 4,                       ///< Дни
         };
 //------------------------------------------------------------------------------
+        std::string log_file_name = BINARY_API_LOG_FILE_NAME;
 private:
         WssClient client_; // Класс клиента
         std::shared_ptr<WssClient::Connection> save_connection_; // Соединение
@@ -222,9 +223,9 @@ private:
                 std::string str_line = "//------------------------------------------------------------------------------\n";
                 std::string error_message = str_line +
                         "start of error message (" +
-                        xtime::get_str_unix_date_time() + "):\n" +
+                        xtime::get_str_date_time() + "):\n" +
                         message + "\nend of error message\n" + str_line;
-                write_log_file(BINARY_API_LOG_FILE_NAME, error_message);
+                write_log_file(log_file_name, error_message);
         }
 //------------------------------------------------------------------------------
         bool check_time_message(json &j,
@@ -1147,6 +1148,57 @@ public:
         }
 //------------------------------------------------------------------------------
         /** \brief Получить исторические данные минутных свечей
+         * \param candles данные минутных свечей
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        template <class CANDLE_TYPE>
+        int get_candles(std::vector<CANDLE_TYPE> &candles)
+        {
+                if(!is_send_array_candles_)
+                        return NO_COMMAND;
+                is_send_array_candles_ = false;
+
+                auto start = std::chrono::steady_clock::now();
+                auto stop = std::chrono::steady_clock::now();
+                while(true) {
+                        std::this_thread::yield();
+
+                        // получили историю
+                        if(is_array_candles_) {
+                                break;
+                        }
+
+                        stop = std::chrono::steady_clock::now();
+                        auto diff = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+                        const float MAX_DELAY = 60.0f;
+                        // слишком долго ждем историю
+                        if(diff.count() > MAX_DELAY) {
+                                return UNKNOWN_ERROR;
+                        }
+                }
+                // если была ошибка получения котировок
+                if(is_array_candles_error_) {
+                        return UNKNOWN_ERROR;
+                } else {
+                        // преобразуем данные
+                        array_candles_mutex_.lock();
+                        candles.resize(array_candles_.size());
+                        for(size_t i = 0; i < array_candles_.size(); i++) {
+                                json j = array_candles_[i];
+                                candles[i].open = j["open"];//atof((j["open"].get<std::string>()).c_str());
+                                candles[i].high = j["high"];//atof((j["high"].get<std::string>()).c_str());
+                                candles[i].low = j["low"];//atof((j["low"].get<std::string>()).c_str());
+                                candles[i].close = j["close"];//atof((j["close"].get<std::string>()).c_str());
+                                //std::string timestr = //j["epoch"].dump();
+                                candles[i].timestamp = j["epoch"];//atoi(timestr.c_str());
+                        }
+                        array_candles_mutex_.unlock();
+                        if(candles.size() == 0) return DATA_NOT_AVAILABLE;
+                }
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить исторические данные минутных свечей
          * \param symbol Имя валютной пары
          * \param close Цены закрытия свечей
          * \param times Временные метки открытия свечей
@@ -1166,6 +1218,28 @@ public:
                 if(err_data != OK)
                         return err_data;
                 return get_candles(close, times);
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить исторические данные минутных свечей
+         * \param symbol Имя валютной пары
+         * \param close Цены закрытия свечей
+         * \param times Временные метки открытия свечей
+         * \param startepoch Время начала получения тиков. Влияет, если тиков между startepoch и endepoch не больше 5000
+         * \param endepoch Конечное время получения тиков. Если нужно получить последние тики, укажите 0
+         * \param count_candles Количество свечей. Не имеет смысла ставить данный параметр больше 5000
+         * \return состояние ошибки (0 в случае успеха, иначе см. ErrorType)
+         */
+        template <class CANDLE_TYPE>
+        int get_candles(std::string symbol,
+                        std::vector<CANDLE_TYPE> &candles,
+                        unsigned long long startepoch,
+                        unsigned long long endepoch,
+                        int count_candles = 5000)
+        {
+                int err_data = download_candles(symbol, startepoch, endepoch, count_candles);
+                if(err_data != OK)
+                        return err_data;
+                return get_candles(candles);
         }
 //------------------------------------------------------------------------------
         int get_candles_without_limits(std::string symbol,
@@ -1207,6 +1281,60 @@ public:
                         catch(...) {
                                 close.erase(close.begin() + close_size, close.end());
                                 times.erase(times.begin() + times_size, times.end());
+                                return UNKNOWN_ERROR;
+                        }
+
+                        if(_endepoch == endepoch) {
+                                break;
+                        }
+                        // чтобы один и тот же момент времени не встречался дважды
+                        epoch = _endepoch + xtime::SECONDS_IN_MINUTE;
+                } // while
+                return OK;
+        }
+//------------------------------------------------------------------------------
+        /** \brief Получить свечи без лимита по времени
+         * \param symbol имя символа для загрузки исторических данных
+         * \param candles массив свечей
+         * \param startepoch начальная эпоха
+         * \param endepoch конечная эпоха
+         * \return вернет состояние ошибки
+         */
+        template <class CANDLE_TYPE>
+        int get_candles_without_limits(std::string symbol,
+                                       std::vector<CANDLE_TYPE> &candles,
+                                       xtime::timestamp_t startepoch,
+                                       xtime::timestamp_t endepoch)
+        {
+                if(startepoch == 0 || endepoch == 0 || endepoch < startepoch)
+                        return INVALID_PARAMETER;
+
+                xtime::timestamp_t epoch = startepoch;
+                const int COUNT_TICKS_LIMIT = xtime::SECONDS_IN_MINUTE*5000;
+                //std::cout << "startepoch " << startepoch << " endepoch " << endepoch << std::endl;
+                while(true) {
+                        std::vector<CANDLE_TYPE> _candles;
+                        xtime::timestamp_t _endepoch = epoch + COUNT_TICKS_LIMIT;
+                        if(_endepoch > endepoch) {
+                                _endepoch = endepoch;
+                        }
+                        int err_data = get_candles(symbol, _candles, epoch, _endepoch);
+                        if(_candles.size() > 0 &&
+                            !(_candles[0].timestamp >= epoch &&
+                             _candles.back().timestamp <= _endepoch)) {
+                             return DATA_NOT_AVAILABLE;
+                        }
+
+                        if(err_data != OK && err_data != DATA_NOT_AVAILABLE)
+                                return err_data;
+
+                        const auto candles_size = candles.size();
+                        candles.reserve(candles_size + _candles.size());
+                        try {
+                                candles.insert(candles.end(), _candles.begin(), _candles.end());
+                        }
+                        catch(...) {
+                                candles.erase(candles.begin() + candles_size, candles.end());
                                 return UNKNOWN_ERROR;
                         }
 

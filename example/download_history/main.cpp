@@ -14,8 +14,8 @@ int main() {
         std::vector<double> prices;
         std::vector<unsigned long long> times;
 
-        unsigned long long t1 = xtime::get_unix_timestamp(5,11,2018,0,0,0);
-        unsigned long long t2 = t1 + xtime::SEC_DAY;
+        unsigned long long t1 = xtime::get_timestamp(5,11,2018,0,0,0);
+        unsigned long long t2 = t1 + xtime::SECONDS_IN_DAY;
 
         std::vector<std::vector<double>> prices2;
         std::vector<std::vector<unsigned long long>> times2;
@@ -23,7 +23,7 @@ int main() {
 
         BinaryApiEasy::download_and_save_all_data(apiBinary,"frxAUDCAD","..//..//quotes_ticks//frxAUDCAD", t1, true, BinaryApiEasy::QUOTES_TICKS, BinaryApiEasy::standart_user_function);
 
-        std::cout << "get_candles " << apiBinary.get_candles_without_limits("frxEURUSD", candles_close, candles_times, t1 + 30, t2 + xtime::SEC_DAY * 30) << std::endl;
+        std::cout << "get_candles " << apiBinary.get_candles_without_limits("frxEURUSD", candles_close, candles_times, t1 + 30, t2 + xtime::SECONDS_IN_DAY * 30) << std::endl;
         if(candles_times.size() > 0) {
                 std::cout << "t1: " << t1 << "/" << candles_times[0] << std::endl;
                 std::cout << "t2: " << t2 << "/" << candles_times.back() << std::endl;

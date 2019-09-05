@@ -34,3 +34,6 @@
 [submodule "lib/fann"]
 	path = lib/fann
 	url = https://github.com/libfann/fann.git
+[submodule "lib/xquotes_history"]
+	path = lib/xquotes_history
+	url = https://github.com/NewYaroslav/xquotes_history.git
