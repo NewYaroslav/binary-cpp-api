@@ -2,6 +2,10 @@
 
 ***
 
+### Внимание!
+
+Рекомендую перейти на библиотеку [optionx_cpp](https://github.com/NewYaroslav/optionx_cpp) после добавления в неё API Binary, так как проект `binary-cpp-api` развиваться дальше не будет.
+
 ### Описание
 
 Данная *header-only* библиотека содержит класс для взаимодействия с Binary.com WebSocket API v3. [https://developers.binary.com/api/](https://developers.binary.com/api/). 
